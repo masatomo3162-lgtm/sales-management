@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#185fa5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="床屋管理">
+<title>床屋 管理アプリ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f0;color:#1a1a18}
+.app{max-width:720px;margin:0 auto;min-height:100vh;background:#fff}
+
+/* ── PIN画面 ── */
+#pin-screen{position:fixed;inset:0;background:#185fa5;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000;gap:24px}
+#pin-screen h1{color:#fff;font-size:22px;font-weight:500}
+.pin-dots{display:flex;gap:16px}
+.dot{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,0.6);background:transparent;transition:background .15s}
+.dot.filled{background:#fff;border-color:#fff}
+.keypad{display:grid;grid-template-columns:repeat(3,72px);gap:12px}
+.key{height:72px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.1);color:#fff;font-size:24px;font-weight:400;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .1s;-webkit-tap-highlight-color:transparent}
+.key:active{background:rgba(255,255,255,0.3)}
+.key.del{font-size:18px}
+.pin-err{color:rgba(255,255,255,0.9);font-size:14px;min-height:20px}
+.pin-note{color:rgba(255,255,255,0.8);font-size:13px;text-align:center;max-width:260px;line-height:1.6}
+
+/* ── アプリ切り替えヘッダー ── */
+.global-header{background:#185fa5;color:#fff;padding:10px 14px 8px;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.gh-title{display:flex;flex-direction:column}
+.gh-title h1{font-size:16px;font-weight:600;line-height:1.2}
+.gh-title .sub{font-size:11px;opacity:0.75;margin-top:1px}
+.app-switch{display:flex;gap:6px;flex-shrink:0}
+.sw-btn{padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);transition:all .15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.sw-btn.active{background:#fff;color:#185fa5;border-color:#fff}
+.sw-btn:not(.active):hover{background:rgba(255,255,255,0.2)}
+
+/* ── タブ（売上管理） ── */
+.tabs{display:flex;border-bottom:1px solid #e8e8e3;background:#fff;position:sticky;top:49px;z-index:99}
+.tab{flex:1;padding:11px 4px;font-size:13px;cursor:pointer;border:none;background:none;color:#888;border-bottom:2px solid transparent;transition:all .15s}
+.tab.active{color:#185fa5;font-weight:600;border-bottom-color:#185fa5}
+
+/* ── 比較アプリヘッダー補助（年ナビ） ── */
+.hiku-sub-header{background:#185fa5;border-top:1px solid rgba(255,255,255,0.2);padding:6px 14px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:49px;z-index:99}
+.year-nav{display:flex;align-items:center;gap:10px}
+.year-btn{background:rgba(255,255,255,0.15);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.year-btn:hover{background:rgba(255,255,255,0.3)}
+.year-label{font-size:15px;font-weight:600;color:#fff;min-width:58px;text-align:center}
+.hiku-tabs{display:flex;border-bottom:1px solid #e8e8e3;background:#fff;position:sticky;top:97px;z-index:98}
+.hiku-tab{flex:1;padding:10px 2px;font-size:12px;cursor:pointer;border:none;background:none;color:#888;border-bottom:2px solid transparent;transition:all .15s}
+.hiku-tab.active{color:#185fa5;font-weight:600;border-bottom-color:#185fa5}
+
+/* ── 共通レイアウト ── */
+.section{display:none;padding:16px}.section.active{display:block}
+.card{background:#fff;border:1px solid #e8e8e3;border-radius:12px;padding:16px;margin-bottom:14px}
+.card-title{font-size:12px;font-weight:600;color:#888;margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em}
+
+/* ── 売上管理：メトリクス ── */
+.mg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.m{background:#f5f5f0;border-radius:10px;padding:11px 10px}
+.m .l{font-size:11px;color:#888;margin-bottom:3px}
+.m .v{font-size:17px;font-weight:700;color:#1a1a18}
+.m .s{font-size:10px;color:#aaa;margin-top:2px}
+
+/* ── 売上管理：フォーム ── */
+.fg{margin-bottom:12px}
+.fg label{font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:5px}
+.fg input{width:100%;padding:10px 12px;border:1.5px solid #ddd;border-radius:10px;font-size:15px;background:#fff;color:#1a1a18;transition:border .15s}
+.fg input:focus{outline:none;border-color:#185fa5}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sec-label{font-size:12px;font-weight:600;color:#888;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #eee;text-transform:uppercase;letter-spacing:.04em}
+.cnt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+.cnt-item{display:flex;flex-direction:column;gap:4px}
+.cnt-item label{font-size:11px;color:#666;font-weight:500}
+.cnt-item input{padding:8px;border:1.5px solid #ddd;border-radius:10px;font-size:15px;background:#fff;color:#0000cc;text-align:center}
+.cnt-item input:focus{outline:none;border-color:#185fa5}
+
+/* ── ボタン ── */
+.btn{padding:10px 18px;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;border:1.5px solid #ddd;background:#fff;color:#1a1a18;transition:all .15s}
+.btn:hover{background:#f5f5f0}
+.btn-p{background:#185fa5;color:#fff;border-color:#185fa5;width:100%}
+.btn-p:hover{background:#0c447c}
+.btn-csv{font-size:12px;padding:7px 14px;color:#185fa5;border-color:#b5d4f4;background:#e6f1fb}
+.btn-imp{font-size:12px;padding:7px 14px;color:#3b6d11;border-color:#c0dd97;background:#eaf3de}
+.btn-danger{font-size:12px;padding:7px 14px;color:#a32d2d;border-color:#f7c1c1;background:#fcebeb}
+.msg{font-size:13px;padding:9px 12px;border-radius:8px;margin-top:10px;display:none}
+.msg.ok{background:#eaf3de;color:#3b6d11}
+.msg.err{background:#fcebeb;color:#a32d2d}
+
+/* ── テーブル（売上管理） ── */
+table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+th{font-size:11px;font-weight:600;color:#888;text-align:left;padding:6px 6px;border-bottom:1px solid #eee;background:#fafaf8}
+td{padding:7px 6px;border-bottom:1px solid #f0f0ec;color:#1a1a18;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.nr{text-align:right}.nc{text-align:center}.fw{font-weight:600}
+.db{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:10px;font-weight:700}
+.d0,.d6{background:#FAECE7;color:#993C1D}
+.d1,.d2,.d3,.d4,.d5{background:#E6F1FB;color:#185fa5}
+.wh{background:#f5f5f0;font-size:11px;font-weight:600;color:#555}
+select{padding:8px 12px;border:1.5px solid #ddd;border-radius:10px;font-size:13px;background:#fff;color:#1a1a18}
+select:focus{outline:none;border-color:#185fa5}
+.sel-row{display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap}
+.empty{text-align:center;padding:28px;color:#aaa;font-size:13px}
+.del-btn{font-size:11px;padding:2px 7px;border-radius:6px;cursor:pointer;border:1px solid #ddd;background:none;color:#aaa}
+.del-btn:hover{color:#a32d2d;border-color:#a32d2d;background:#fcebeb}
+
+/* ── グラフ ── */
+.chart-wrap{position:relative;width:100%;height:250px;margin-top:8px}
+.leg{display:flex;gap:12px;font-size:11px;color:#888;margin-bottom:6px;flex-wrap:wrap}
+.leg span{display:flex;align-items:center;gap:4px}
+.leg-sq{width:10px;height:10px;border-radius:2px;display:inline-block}
+.chart-btns{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.chart-btns .btn{font-size:12px;padding:6px 12px}
+.chart-btns .btn.act{background:#185fa5;color:#fff;border-color:#185fa5}
+
+/* ── 設定（売上管理） ── */
+.settings-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #f0f0ec}
+.settings-item:last-child{border-bottom:none}
+.settings-item .si-label{font-size:14px;color:#1a1a18}
+.settings-item .si-sub{font-size:12px;color:#aaa;margin-top:2px}
+
+/* ── 連携バッジ ── */
+.sync-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#3b6d11;background:#eaf3de;border:1px solid #c0dd97;border-radius:6px;padding:3px 8px;margin-top:6px}
+
+/* ── 比較アプリ：概要 ── */
+.store-names{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.store-name-box{border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px}
+.store-a{background:#EBF4FF;border:1px solid #b5d4f4}
+.store-b{background:#FFF4EB;border:1px solid #f4c989}
+.store-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot-a{background:#185fa5}.dot-b{background:#c46b00}
+.store-name-input{background:none;border:none;font-size:14px;font-weight:600;color:#1a1a18;width:100%}
+.store-name-input:focus{outline:none}
+.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #f0f0ec}
+.summary-col:first-child{border-right:1px solid #f0f0ec}
+.store-header{padding:7px 12px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;border-bottom:1px solid #f0f0ec}
+.sh-a{background:#EBF4FF;color:#185fa5}.sh-b{background:#FFF4EB;color:#c46b00}
+.month-table{width:100%;border-collapse:collapse}
+.month-table th{font-size:11px;font-weight:600;color:#aaa;padding:5px 8px;text-align:right;background:#fafaf8}
+.month-table th:first-child{text-align:left}
+.month-table td{font-size:12px;padding:6px 8px;border-top:1px solid #f5f5f0;text-align:right}
+.month-table td:first-child{text-align:left;color:#555;font-size:11px}
+.month-table tr:hover td{background:#fafaf8}
+.month-table .total-row td{font-weight:700;background:#f5f5f0;font-size:12px}
+.month-table .cum{font-size:11px;color:#aaa}
+.year-table{width:100%;border-collapse:collapse}
+.year-table th{font-size:11px;font-weight:600;color:#aaa;padding:7px 14px;text-align:right;background:#fafaf8;border-bottom:1px solid #f0f0ec}
+.year-table th:first-child{text-align:left}
+.year-table td{font-size:14px;font-weight:500;padding:9px 14px;border-top:1px solid #f0f0ec;text-align:right}
+.year-table td:first-child{text-align:left;color:#555;font-size:13px;font-weight:400}
+.year-table .cur-year td{background:#FFFBF0}
+.a-val{color:#185fa5}.b-val{color:#c46b00}
+
+/* ── 比較アプリ：月別・日別 ── */
+.hiku-sel-row{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+.hiku-sel-row select{padding:7px 12px;border:1.5px solid #ddd;border-radius:10px;font-size:13px;background:#fff;color:#1a1a18}
+.hiku-sel-row select:focus{outline:none;border-color:#185fa5}
+.view-toggle{display:flex;gap:4px}
+.vt-btn{padding:6px 12px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #ddd;background:#fff;color:#888}
+.vt-btn.active{background:#185fa5;color:#fff;border-color:#185fa5}
+.daily-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.daily-col:first-child{border-right:1px solid #f0f0ec}
+.daily-table{width:100%;border-collapse:collapse}
+.daily-table th{font-size:10px;font-weight:600;color:#aaa;padding:5px 8px;text-align:right;background:#fafaf8}
+.daily-table th:first-child{text-align:left;padding-left:10px}
+.daily-table td{font-size:12px;padding:5px 8px;border-top:1px solid #f5f5f0;text-align:right}
+.daily-table td:first-child{text-align:left;color:#888;font-size:11px;padding-left:10px}
+.daily-table tr:hover td{background:#fafaf8}
+.daily-table .total-row td{font-weight:700;background:#f5f5f0}
+.mo-full-table{width:100%;border-collapse:collapse}
+.mo-full-table th{font-size:11px;font-weight:600;color:#aaa;padding:7px 12px;text-align:right;background:#fafaf8;border-bottom:1px solid #f0f0ec}
+.mo-full-table th:first-child{text-align:left}
+.mo-full-table td{font-size:13px;padding:8px 12px;border-top:1px solid #f0f0ec;text-align:right}
+.mo-full-table td:first-child{text-align:left;color:#555;font-size:12px}
+.mo-full-table .total-row td{font-weight:700;background:#f5f5f0}
+
+/* ── 比較アプリ：入力 ── */
+.inp-mode-row{display:flex;gap:4px;margin-bottom:12px}
+.inp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px}
+.inp-col-title{font-size:12px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.it-a{color:#185fa5}.it-b{color:#c46b00}
+.month-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.month-row label{font-size:12px;color:#888;width:32px;flex-shrink:0}
+.month-row input{flex:1;padding:7px 8px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;text-align:right;color:#1a1a18;background:#fff}
+.month-row input:focus{outline:none;border-color:#185fa5}
+.month-row input.has-val{border-color:#b0c8e8;background:#f0f6ff}
+.inp-col-b .month-row input.has-val{border-color:#e8c88a;background:#fff8f0}
+.day-inp-sel{display:flex;gap:8px;padding:14px 14px 0;align-items:center;flex-wrap:wrap}
+.day-inp-sel select{padding:7px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff}
+.day-inp-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:10px}
+.day-inp-col{padding:0 14px 14px}
+.day-inp-col:first-child{border-right:1px solid #f0f0ec}
+.day-inp-title{font-size:12px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px;padding-top:12px}
+.hiku-save-btn{display:block;width:calc(100% - 28px);margin:0 14px 14px;padding:12px;background:#185fa5;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer}
+.hiku-save-btn:hover{background:#0c447c}
+.hiku-msg{font-size:13px;padding:9px 14px;margin:0 14px 14px;border-radius:8px;display:none}
+.hiku-msg.ok{background:#eaf3de;color:#3b6d11}
+.hiku-msg.err{background:#fcebeb;color:#a32d2d}
+
+/* ── 比較アプリ：設定 ── */
+.setting-row{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #f0f0ec}
+.setting-row:last-child{border-bottom:none}
+.sr-label{font-size:14px}.sr-sub{font-size:12px;color:#aaa;margin-top:2px}
+.small-btn{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #ddd;background:#fff;color:#1a1a18}
+.small-btn.btn-csv{color:#185fa5;border-color:#b5d4f4;background:#e6f1fb}
+.small-btn.btn-imp{color:#3b6d11;border-color:#c0dd97;background:#eaf3de}
+.small-btn.btn-danger{color:#a32d2d;border-color:#f7c1c1;background:#fcebeb}
+.empty-note{text-align:center;padding:24px;color:#bbb;font-size:13px}
+
+/* ── 同期済みセル表示 ── */
+.synced-cell{position:relative}
+.synced-cell::after{content:'✂';font-size:8px;color:#185fa5;opacity:0.5;margin-left:2px}
+
+@media(max-width:400px){
+  .mg{grid-template-columns:repeat(2,1fr)}
+  .cnt-grid{grid-template-columns:repeat(2,1fr)}
+  .sw-btn{padding:5px 9px;font-size:11px}
+}
+</style>
+</head>
+<body>
+
+<!-- ── PIN画面（共通） ── -->
+<div id="pin-screen">
+  <h1>✂ 床屋管理</h1>
+  <div class="pin-dots">
+    <div class="dot" id="d0"></div>
+    <div class="dot" id="d1"></div>
+    <div class="dot" id="d2"></div>
+    <div class="dot" id="d3"></div>
+  </div>
+  <div class="pin-err" id="pin-err"></div>
+  <div class="keypad">
+    <button class="key" onclick="pinKey('1')">1</button>
+    <button class="key" onclick="pinKey('2')">2</button>
+    <button class="key" onclick="pinKey('3')">3</button>
+    <button class="key" onclick="pinKey('4')">4</button>
+    <button class="key" onclick="pinKey('5')">5</button>
+    <button class="key" onclick="pinKey('6')">6</button>
+    <button class="key" onclick="pinKey('7')">7</button>
+    <button class="key" onclick="pinKey('8')">8</button>
+    <button class="key" onclick="pinKey('9')">9</button>
+    <button class="key" style="visibility:hidden"></button>
+    <button class="key" onclick="pinKey('0')">0</button>
+    <button class="key del" onclick="pinDel()">⌫</button>
+  </div>
+  <div class="pin-note" id="pin-note"></div>
+</div>
+
+<!-- ── メインアプリ ── -->
+<div class="app" id="main-app" style="display:none">
+
+  <!-- グローバルヘッダー（常に表示） -->
+  <div class="global-header">
+    <div class="gh-title">
+      <h1 id="gh-title-text">✂ 売上管理</h1>
+      <div class="sub" id="gh-sub"></div>
+    </div>
+    <div class="app-switch">
+      <button class="sw-btn active" id="sw-sales" onclick="switchApp('sales')">✂ 売上</button>
+      <button class="sw-btn" id="sw-hikaku" onclick="switchApp('hikaku')">📊 比較</button>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════
+       売上管理アプリ
+  ════════════════════════════════════════ -->
+  <div id="app-sales">
+    <div class="tabs">
+      <button class="tab active" onclick="sw_s('input')">入力</button>
+      <button class="tab" onclick="sw_s('list')">一覧</button>
+      <button class="tab" onclick="sw_s('summary')">集計</button>
+      <button class="tab" onclick="sw_s('settings')">設定</button>
+    </div>
+
+    <!-- 入力 -->
+    <div id="sec-input" class="section active">
+      <div class="card">
+        <div class="card-title">売上入力</div>
+        <div class="row2">
+          <div class="fg"><label>日付</label><input type="date" id="inp-date"></div>
+        </div>
+        <div class="sec-label">売上</div>
+        <div class="row2">
+          <div class="fg"><label>現金（円）</label><input type="number" id="inp-cash" placeholder="0" min="0" inputmode="numeric"></div>
+          <div class="fg"><label>キャッシュレス（円）</label><input type="number" id="inp-cl" placeholder="0" min="0" inputmode="numeric"></div>
+        </div>
+        <div class="sec-label">客層（人数）</div>
+        <div class="cnt-grid">
+          <div class="cnt-item"><label>男性</label><input type="number" id="c-male" placeholder="0" min="0" inputmode="numeric"></div>
+          <div class="cnt-item"><label>女性</label><input type="number" id="c-female" placeholder="0" min="0" inputmode="numeric"></div>
+          <div class="cnt-item"><label>小学生</label><input type="number" id="c-elem" placeholder="0" min="0" inputmode="numeric"></div>
+          <div class="cnt-item"><label>中学生</label><input type="number" id="c-mid" placeholder="0" min="0" inputmode="numeric"></div>
+          <div class="cnt-item"><label>高校生</label><input type="number" id="c-high" placeholder="0" min="0" inputmode="numeric"></div>
+        </div>
+        <div class="sec-label">メニュー（人数）</div>
+        <div class="cnt-grid">
+          <div class="cnt-item"><label>パーマ</label><input type="number" id="c-perm" placeholder="0" min="0" inputmode="numeric"></div>
+          <div class="cnt-item"><label>カラーリング</label><input type="number" id="c-color" placeholder="0" min="0" inputmode="numeric"></div>
+        </div>
+        <button class="btn btn-p" onclick="saveEntry()" style="margin-top:6px">登録する</button>
+        <div class="msg" id="s-msg"></div>
+      </div>
+      <div id="today-box" style="display:none">
+        <div class="mg" id="today-cards"></div>
+      </div>
+    </div>
+
+    <!-- 一覧 -->
+    <div id="sec-list" class="section">
+      <div class="sel-row">
+        <select id="list-month" onchange="renderList()"></select>
+        <button class="btn btn-csv" onclick="exportCSV()">CSV出力</button>
+        <span style="font-size:12px;color:#aaa" id="list-count"></span>
+      </div>
+      <div id="list-body"></div>
+    </div>
+
+    <!-- 集計 -->
+    <div id="sec-summary" class="section">
+      <div class="sel-row">
+        <select id="sum-month" onchange="renderSum()"></select>
+      </div>
+      <div class="mg" id="sum-cards"></div>
+      <div id="sum-monthly"></div>
+      <div class="card">
+        <div class="card-title">客層集計</div>
+        <div id="guest-sum"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">曜日別集計</div>
+        <table><thead><tr><th>曜</th><th class="nr">現金</th><th class="nr">CL</th><th class="nr">売上合計</th><th class="nr">客数</th><th class="nr">客単価</th><th class="nr">P/C</th></tr></thead>
+        <tbody id="day-sum"></tbody></table>
+      </div>
+      <div class="card">
+        <div class="card-title">週別集計</div>
+        <table><thead><tr><th>週</th><th class="nr">現金</th><th class="nr">CL</th><th class="nr">売上合計</th><th class="nr">客数</th><th class="nr">1日平均</th></tr></thead>
+        <tbody id="week-sum"></tbody></table>
+      </div>
+      <div class="card">
+        <div class="card-title">グラフ</div>
+        <div class="leg" id="chart-leg"></div>
+        <div class="chart-wrap"><canvas id="chart" role="img" aria-label="売上グラフ"></canvas></div>
+        <div class="chart-btns">
+          <button class="btn act" onclick="setChart('sales',this)">売上</button>
+          <button class="btn" onclick="setChart('guests',this)">客数</button>
+          <button class="btn" onclick="setChart('dow',this)">曜日別</button>
+          <button class="btn" onclick="setChart('menu',this)">メニュー</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 設定 -->
+    <div id="sec-settings" class="section">
+      <div class="card">
+        <div class="card-title">データ管理</div>
+        <div class="settings-item">
+          <div><div class="si-label">CSVインポート</div><div class="si-sub">以前エクスポートしたCSVを読み込む</div></div>
+          <label class="btn btn-imp" style="cursor:pointer">ファイル選択<input type="file" accept=".csv" id="csv-import" style="display:none" onchange="importCSV(this)"></label>
+        </div>
+        <div class="settings-item">
+          <div><div class="si-label">全データエクスポート</div><div class="si-sub">全期間のデータをCSVで出力</div></div>
+          <button class="btn btn-csv" onclick="exportAllCSV()">全期間CSV</button>
+        </div>
+        <div class="settings-item">
+          <div><div class="si-label">全データ削除</div><div class="si-sub">すべての売上データを消去する</div></div>
+          <button class="btn btn-danger" onclick="deleteSalesAll()">全削除</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">比較アプリ連携</div>
+        <div class="settings-item">
+          <div>
+            <div class="si-label">自動同期</div>
+            <div class="si-sub">登録した売上を比較アプリの店舗Aに自動反映</div>
+            <div class="sync-badge">✓ 常に有効</div>
+          </div>
+        </div>
+        <div class="settings-item">
+          <div><div class="si-label">今すぐ全データを同期</div><div class="si-sub">売上管理の全データを比較アプリに反映</div></div>
+          <button class="btn btn-csv" onclick="syncAllToHikaku()">同期する</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">PINコード</div>
+        <div class="settings-item">
+          <div><div class="si-label">PINコードを変更</div><div class="si-sub" id="s-pin-status"></div></div>
+          <button class="btn" onclick="changePIN()">変更</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">アプリについて</div>
+        <div class="settings-item">
+          <div><div class="si-label">床屋 管理アプリ</div><div class="si-sub">ver 3.0（統合版）— データはこのデバイスに保存されます</div></div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /#app-sales -->
+
+  <!-- ════════════════════════════════════════
+       比較アプリ
+  ════════════════════════════════════════ -->
+  <div id="app-hikaku" style="display:none">
+    <div class="hiku-sub-header">
+      <div class="year-nav">
+        <button class="year-btn" onclick="changeYear(-1)">‹</button>
+        <div class="year-label" id="year-label">2025年</div>
+        <button class="year-btn" onclick="changeYear(1)">›</button>
+      </div>
+    </div>
+    <div class="hiku-tabs">
+      <button class="hiku-tab active" onclick="sw_h('overview')">概要</button>
+      <button class="hiku-tab" onclick="sw_h('monthly')">月別</button>
+      <button class="hiku-tab" onclick="sw_h('yearly')">年別</button>
+      <button class="hiku-tab" onclick="sw_h('input')">入力</button>
+      <button class="hiku-tab" onclick="sw_h('settings')">設定</button>
+    </div>
+
+    <!-- 概要 -->
+    <div id="h-sec-overview" class="section active">
+      <div class="store-names">
+        <div class="store-name-box store-a"><div class="store-dot dot-a"></div><input class="store-name-input" id="name-a" value="店舗A" onchange="saveNames()" placeholder="店舗A"></div>
+        <div class="store-name-box store-b"><div class="store-dot dot-b"></div><input class="store-name-input" id="name-b" value="店舗B" onchange="saveNames()" placeholder="店舗B"></div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="card-title" id="ov-month-title" style="padding:12px 16px 0">月別売上</div>
+        <div class="summary-grid">
+          <div class="summary-col">
+            <div class="store-header sh-a"><span class="store-dot dot-a"></span><span id="ov-name-a">店舗A</span></div>
+            <table class="month-table"><thead><tr><th>月</th><th>売上</th><th>累計</th></tr></thead><tbody id="ov-a"></tbody></table>
+          </div>
+          <div class="summary-col">
+            <div class="store-header sh-b"><span class="store-dot dot-b"></span><span id="ov-name-b">店舗B</span></div>
+            <table class="month-table"><thead><tr><th>月</th><th>売上</th><th>累計</th></tr></thead><tbody id="ov-b"></tbody></table>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="card-title" style="padding:12px 16px 8px">年間売上比較</div>
+        <table class="year-table">
+          <thead><tr><th>年</th><th id="yt-a">店舗A</th><th id="yt-b">店舗B</th></tr></thead>
+          <tbody id="year-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 月別 -->
+    <div id="h-sec-monthly" class="section">
+      <div class="hiku-sel-row">
+        <select id="mo-month-sel" onchange="renderMonthly()"></select>
+        <div class="view-toggle">
+          <button class="vt-btn active" onclick="setMonthView('month',this)">月次</button>
+          <button class="vt-btn" onclick="setMonthView('daily',this)">日別</button>
+        </div>
+      </div>
+      <div id="mo-view-month">
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="card-title" id="mo-title" style="padding:12px 16px 8px">月別詳細</div>
+          <table class="mo-full-table">
+            <thead><tr><th>月</th><th id="mo-ha" style="text-align:right">店舗A</th><th id="mo-hb" style="text-align:right">店舗B</th></tr></thead>
+            <tbody id="mo-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="mo-view-daily" style="display:none">
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="card-title" id="daily-title" style="padding:12px 16px 8px">日別売上</div>
+          <div class="daily-grid">
+            <div class="daily-col">
+              <div class="store-header sh-a" style="padding:7px 10px"><span class="store-dot dot-a"></span><span id="dv-name-a">店舗A</span></div>
+              <table class="daily-table"><thead><tr><th>日</th><th>売上</th><th>累計</th></tr></thead><tbody id="dv-a"></tbody></table>
+            </div>
+            <div class="daily-col">
+              <div class="store-header sh-b" style="padding:7px 10px"><span class="store-dot dot-b"></span><span id="dv-name-b">店舗B</span></div>
+              <table class="daily-table"><thead><tr><th>日</th><th>売上</th><th>累計</th></tr></thead><tbody id="dv-b"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 年別 -->
+    <div id="h-sec-yearly" class="section">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="card-title" style="padding:12px 16px 8px">全年度 年間売上</div>
+        <table class="year-table">
+          <thead><tr><th>年</th><th id="yr-ha" style="text-align:right">店舗A</th><th id="yr-hb" style="text-align:right">店舗B</th></tr></thead>
+          <tbody id="yr-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 入力 -->
+    <div id="h-sec-input" class="section">
+      <div class="inp-mode-row">
+        <button class="vt-btn active" onclick="setInpMode('month',this)">月次入力</button>
+        <button class="vt-btn" onclick="setInpMode('daily',this)">日別入力</button>
+      </div>
+      <div id="inp-view-month">
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="card-title" id="inp-title" style="padding:12px 16px 8px">月次売上入力</div>
+          <div class="inp-grid">
+            <div class="inp-col">
+              <div class="inp-col-title it-a"><span class="store-dot dot-a"></span><span id="inp-name-a">店舗A</span></div>
+              <div id="inp-a"></div>
+            </div>
+            <div class="inp-col inp-col-b">
+              <div class="inp-col-title it-b"><span class="store-dot dot-b"></span><span id="inp-name-b">店舗B</span></div>
+              <div id="inp-b"></div>
+            </div>
+          </div>
+          <div class="hiku-msg" id="inp-msg"></div>
+          <button class="hiku-save-btn" onclick="saveMonthly()">保存する</button>
+        </div>
+      </div>
+      <div id="inp-view-daily" style="display:none">
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="card-title" style="padding:12px 16px 8px">日別売上入力</div>
+          <div class="day-inp-sel">
+            <select id="day-inp-year" onchange="buildDayForm()"></select>
+            <select id="day-inp-month" onchange="buildDayForm()"></select>
+          </div>
+          <div class="day-inp-grid">
+            <div class="day-inp-col">
+              <div class="day-inp-title it-a"><span class="store-dot dot-a"></span><span id="dinp-name-a">店舗A</span></div>
+              <div id="dinp-a"></div>
+            </div>
+            <div class="day-inp-col inp-col-b">
+              <div class="day-inp-title it-b"><span class="store-dot dot-b"></span><span id="dinp-name-b">店舗B</span></div>
+              <div id="dinp-b"></div>
+            </div>
+          </div>
+          <div class="hiku-msg" id="dinp-msg"></div>
+          <button class="hiku-save-btn" onclick="saveDaily()">保存する</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 設定 -->
+    <div id="h-sec-settings" class="section">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="card-title" style="padding:12px 16px 8px">データ管理</div>
+        <div class="setting-row">
+          <div><div class="sr-label">CSVエクスポート（今年）</div><div class="sr-sub">表示中の年のデータを出力</div></div>
+          <button class="small-btn btn-csv" onclick="hExportCSV()">CSV出力</button>
+        </div>
+        <div class="setting-row">
+          <div><div class="sr-label">全期間エクスポート</div><div class="sr-sub">全年度まとめてCSV出力</div></div>
+          <button class="small-btn btn-csv" onclick="hExportAllCSV()">全期間CSV</button>
+        </div>
+        <div class="setting-row">
+          <div><div class="sr-label">CSVインポート</div><div class="sr-sub">このアプリで出力したCSVを読み込む</div></div>
+          <label class="small-btn btn-imp" style="cursor:pointer">ファイル選択<input type="file" accept=".csv" id="h-csv-file" style="display:none" onchange="hImportCSV(this)"></label>
+        </div>
+        <div class="setting-row">
+          <div><div class="sr-label">全データ削除</div><div class="sr-sub">すべての売上データを消去</div></div>
+          <button class="small-btn btn-danger" onclick="hDeleteAll()">全削除</button>
+        </div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="card-title" style="padding:12px 16px 8px">売上管理連携</div>
+        <div class="setting-row">
+          <div>
+            <div class="sr-label">店舗A = 売上管理の売上</div>
+            <div class="sr-sub">売上登録時に店舗Aへ自動反映されます</div>
+            <div class="sync-badge">✓ 常に有効</div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="card-title" style="padding:12px 16px 8px">PINコード</div>
+        <div class="setting-row">
+          <div><div class="sr-label">PINを変更</div><div class="sr-sub" id="h-pin-status"></div></div>
+          <button class="small-btn" onclick="changePIN()">変更</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /#app-hikaku -->
+
+</div><!-- /#main-app -->
+
+<script>
+// ═══════════════════════════════════════════════════════
+// 定数・共通
+// ═══════════════════════════════════════════════════════
+const DAYS=['日','月','火','水','木','金','土'];
+const MONTHS_H=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+// 売上管理キー
+const S_KEY='barber_v3';
+const PIN_KEY='barber_pin';  // 共通PINキー
+
+// 比較アプリキー
+const MKEY='store_sales_v1';
+const DKEY='store_daily_v1';
+const NKEY='store_names_v1';
+
+// 状態
+let myChart=null, chartMode='sales';
+let pinBuf='', pinMode='verify', pinStep=1, pinFirst='';
+let curApp='sales';
+let curYear=new Date().getFullYear();
+let monthView='month', inpMode='month';
+
+// ═══════════════════════════════════════════════════════
+// PIN（共通）
+// ═══════════════════════════════════════════════════════
+function getPin(){return localStorage.getItem(PIN_KEY)||''}
+function savePin(p){localStorage.setItem(PIN_KEY,p)}
+
+function initPin(){
+  const pin=getPin();
+  const note=document.getElementById('pin-note');
+  if(!pin){
+    pinMode='setup';pinStep=1;
+    note.textContent='初回設定：4桁のPINを入力してください';
+    document.querySelector('#pin-screen h1').textContent='PIN設定';
+  }else{
+    pinMode='verify';note.textContent='';
+  }
+}
+
+function pinKey(k){
+  if(pinBuf.length>=4)return;
+  pinBuf+=k;updateDots();
+  if(pinBuf.length===4)setTimeout(handlePin,120);
+}
+function pinDel(){if(pinBuf.length>0){pinBuf=pinBuf.slice(0,-1);updateDots()}}
+function updateDots(){
+  for(let i=0;i<4;i++)document.getElementById('d'+i).classList.toggle('filled',i<pinBuf.length);
+}
+
+function handlePin(){
+  const err=document.getElementById('pin-err');
+  if(pinMode==='verify'){
+    if(pinBuf===getPin()){
+      document.getElementById('pin-screen').style.display='none';
+      document.getElementById('main-app').style.display='block';
+      initAllApps();
+    }else{
+      err.textContent='PINが違います';pinBuf='';updateDots();
+      setTimeout(()=>err.textContent='',1500);
+    }
+  }else if(pinMode==='setup'){
+    if(pinStep===1){
+      pinFirst=pinBuf;pinBuf='';updateDots();
+      document.getElementById('pin-note').textContent='もう一度入力してください（確認）';
+      pinStep=2;
+    }else{
+      if(pinBuf===pinFirst){
+        savePin(pinBuf);pinBuf='';updateDots();
+        document.getElementById('pin-screen').style.display='none';
+        document.getElementById('main-app').style.display='block';
+        initAllApps();
+      }else{
+        err.textContent='一致しません。最初からやり直してください';
+        pinBuf='';pinFirst='';pinStep=1;updateDots();
+        document.getElementById('pin-note').textContent='4桁のPINを入力してください';
+        setTimeout(()=>err.textContent='',2000);
+      }
+    }
+  }else if(pinMode==='change'){
+    if(pinStep===1){
+      if(pinBuf!==getPin()){
+        err.textContent='現在のPINが違います';pinBuf='';updateDots();
+        setTimeout(()=>err.textContent='',1500);return;
+      }
+      pinStep=2;pinBuf='';updateDots();
+      document.getElementById('pin-note').textContent='新しいPINを入力してください';
+    }else if(pinStep===2){
+      pinFirst=pinBuf;pinBuf='';updateDots();
+      document.getElementById('pin-note').textContent='新しいPINをもう一度入力してください';
+      pinStep=3;
+    }else{
+      if(pinBuf===pinFirst){
+        savePin(pinBuf);pinBuf='';updateDots();
+        document.getElementById('pin-screen').style.display='none';
+        document.getElementById('main-app').style.display='block';
+        updatePinStatus();
+        alert('PINを変更しました');
+      }else{
+        err.textContent='一致しません。もう一度';
+        pinBuf='';pinFirst='';pinStep=2;updateDots();
+        document.getElementById('pin-note').textContent='新しいPINを入力してください';
+        setTimeout(()=>err.textContent='',2000);
+      }
+    }
+  }
+}
+
+function changePIN(){
+  pinMode='change';pinStep=1;pinBuf='';pinFirst='';
+  updateDots();
+  document.querySelector('#pin-screen h1').textContent='PIN変更';
+  document.getElementById('pin-note').textContent='現在のPINを入力してください';
+  document.getElementById('pin-err').textContent='';
+  document.getElementById('main-app').style.display='none';
+  document.getElementById('pin-screen').style.display='flex';
+}
+
+function updatePinStatus(){
+  const txt=getPin()?'設定済み':'未設定';
+  const a=document.getElementById('s-pin-status');
+  const b=document.getElementById('h-pin-status');
+  if(a)a.textContent=txt;
+  if(b)b.textContent=txt;
+}
+
+// ═══════════════════════════════════════════════════════
+// アプリ切り替え
+// ═══════════════════════════════════════════════════════
+function switchApp(appName){
+  curApp=appName;
+  document.getElementById('app-sales').style.display=appName==='sales'?'block':'none';
+  document.getElementById('app-hikaku').style.display=appName==='hikaku'?'block':'none';
+  document.getElementById('sw-sales').classList.toggle('active',appName==='sales');
+  document.getElementById('sw-hikaku').classList.toggle('active',appName==='hikaku');
+  if(appName==='sales'){
+    document.getElementById('gh-title-text').textContent='✂ 売上管理';
+  }else{
+    document.getElementById('gh-title-text').textContent='📊 店舗比較';
+    hUpdateYearLabel();
+    hFillMonthSel();
+    hFillDayInpSels();
+    hBuildMonthlyForm();
+    hBuildDayForm();
+    renderHikakuAll();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// 起動
+// ═══════════════════════════════════════════════════════
+function initAllApps(){
+  const d=new Date();
+  const dateStr=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${DAYS[d.getDay()]}）`;
+  document.getElementById('gh-sub').textContent=dateStr;
+  document.getElementById('inp-date').value=
+    `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  fillSelects();
+  updatePinStatus();
+  hUpdateLabels();
+  hUpdateYearLabel();
+}
+
+// ═══════════════════════════════════════════════════════
+// 売上管理：データ
+// ═══════════════════════════════════════════════════════
+function sLoad(){try{return JSON.parse(localStorage.getItem(S_KEY)||'[]')}catch{return[]}}
+function sPersist(d){localStorage.setItem(S_KEY,JSON.stringify(d))}
+function fmt(n){return Math.round(n).toLocaleString('ja-JP')}
+function toYM(s){return s.slice(0,7)}
+function di(s){return new Date(s+'T00:00:00').getDay()}
+function wn(s){const d=new Date(s+'T00:00:00');return Math.ceil(d.getDate()/7)}
+function ints(id){return parseInt(document.getElementById(id).value)||0}
+
+function months(data){
+  const s=new Set(data.map(r=>toYM(r.date)));
+  const now=new Date(),cur=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  s.add(cur);return[...s].sort().reverse();
+}
+
+function fillSelects(){
+  const data=sLoad(),ms=months(data);
+  const now=new Date(),cur=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const listSel=document.getElementById('list-month');
+  const listPrev=listSel.value;
+  listSel.innerHTML='';
+  ms.forEach(m=>{const[y,mo]=m.split('-'),o=document.createElement('option');o.value=m;o.textContent=`${y}年${parseInt(mo)}月`;listSel.appendChild(o)});
+  if(listPrev&&ms.includes(listPrev))listSel.value=listPrev;
+  else if(ms.includes(cur))listSel.value=cur;
+  else listSel.value=ms[0];
+
+  const sumSel=document.getElementById('sum-month');
+  const sumPrev=sumSel.value;
+  sumSel.innerHTML='';
+  const allOpt=document.createElement('option');allOpt.value='all';allOpt.textContent='全期間';sumSel.appendChild(allOpt);
+  ms.forEach(m=>{const[y,mo]=m.split('-'),o=document.createElement('option');o.value=m;o.textContent=`${y}年${parseInt(mo)}月`;sumSel.appendChild(o)});
+  if(sumPrev&&(sumPrev==='all'||ms.includes(sumPrev)))sumSel.value=sumPrev;
+  else if(ms.includes(cur))sumSel.value=cur;
+  else sumSel.value=ms[0];
+}
+
+// ─── 売上登録（比較アプリへ同期） ───────────────
+function saveEntry(){
+  const date=document.getElementById('inp-date').value;
+  if(!date){showSMsg('日付を入力してください','err');return}
+  const entry={
+    date,
+    cash:ints('inp-cash'),cl:ints('inp-cl'),
+    male:ints('c-male'),female:ints('c-female'),
+    elem:ints('c-elem'),mid:ints('c-mid'),high:ints('c-high'),
+    perm:ints('c-perm'),color:ints('c-color')
+  };
+  entry.total=entry.cash+entry.cl;
+  entry.guests=entry.male+entry.female+entry.elem+entry.mid+entry.high;
+
+  const data=sLoad();
+  const idx=data.findIndex(r=>r.date===date);
+  if(idx>=0){if(!confirm(`${date} のデータが既にあります。上書きしますか？`))return;data[idx]=entry}
+  else data.push(entry);
+  data.sort((a,b)=>a.date.localeCompare(b.date));
+  sPersist(data);
+
+  // 比較アプリへ自動同期
+  syncEntryToHikaku(entry);
+
+  showSMsg('登録しました ✓','ok');
+  renderToday(entry,data);
+  ['inp-cash','inp-cl','c-male','c-female','c-elem','c-mid','c-high','c-perm','c-color']
+    .forEach(id=>document.getElementById(id).value='');
+}
+
+// ─── 比較アプリへ1件同期 ───────────────────────
+function syncEntryToHikaku(entry){
+  // 日別データ（store_daily_v1）に反映
+  const dd=hLoadD();
+  if(!dd[entry.date])dd[entry.date]={a:0,b:0};
+  dd[entry.date].a=entry.total;
+  hSaveD(dd);
+
+  // 月次データ（store_sales_v1）を日別から再集計して反映
+  syncMonthlyFromDaily(toYM(entry.date));
+}
+
+// ─── 指定月の月次を日別から再集計 ───────────────
+function syncMonthlyFromDaily(ym){
+  const dd=hLoadD();
+  const md=hLoadM();
+  // その月の全日別を集計
+  let total=0;
+  Object.keys(dd).forEach(k=>{
+    if(k.startsWith(ym))total+=dd[k].a||0;
+  });
+  if(!md[ym])md[ym]={a:0,b:0};
+  md[ym].a=total;
+  hSaveM(md);
+}
+
+// ─── 全データを比較アプリへ一括同期 ─────────────
+function syncAllToHikaku(){
+  const data=sLoad();
+  if(!data.length){alert('売上データがありません');return}
+  const dd=hLoadD();
+  // まず全日別データのAを上書き
+  data.forEach(entry=>{
+    if(!dd[entry.date])dd[entry.date]={a:0,b:0};
+    dd[entry.date].a=entry.total;
+  });
+  hSaveD(dd);
+  // 月次も全月再集計
+  const yms=new Set(data.map(r=>toYM(r.date)));
+  yms.forEach(ym=>syncMonthlyFromDaily(ym));
+  alert(`同期完了：${data.length}件を比較アプリに反映しました`);
+}
+
+function showSMsg(t,type){
+  const el=document.getElementById('s-msg');
+  el.textContent=t;el.className='msg '+type;el.style.display='block';
+  setTimeout(()=>el.style.display='none',2500);
+}
+
+function renderToday(e,data){
+  const ym=toYM(e.date),md=data.filter(r=>toYM(r.date)===ym);
+  const mT=md.reduce((s,r)=>s+r.total,0),n=md.length;
+  const up=e.guests?Math.round(e.total/e.guests):0;
+  document.getElementById('today-cards').innerHTML=`
+    <div class="m"><div class="l">本日売上</div><div class="v" style="color:#185fa5">¥${fmt(e.total)}</div><div class="s">現金¥${fmt(e.cash)}/CL¥${fmt(e.cl)}</div></div>
+    <div class="m"><div class="l">本日客数</div><div class="v">${e.guests}人</div><div class="s">男${e.male} 女${e.female} 小${e.elem} 中${e.mid} 高${e.high}</div></div>
+    <div class="m"><div class="l">客単価</div><div class="v">${up?'¥'+fmt(up):'-'}</div><div class="s">P:${e.perm} C:${e.color}</div></div>
+    <div class="m"><div class="l">月累計</div><div class="v">¥${fmt(mT)}</div><div class="s">${n}営業日</div></div>
+    <div class="m"><div class="l">月平均/日</div><div class="v">¥${fmt(n?mT/n:0)}</div></div>
+    <div class="m"><div class="l">比較アプリ</div><div class="v" style="color:#3b6d11;font-size:13px">✓ 同期済</div><div class="s">店舗Aに反映</div></div>
+  `;
+  document.getElementById('today-box').style.display='block';
+}
+
+// ─── 売上管理：タブ切り替え ──────────────────────
+function sw_s(name){
+  ['input','list','summary','settings'].forEach((n,i)=>{
+    document.querySelectorAll('#app-sales .tab')[i].classList.toggle('active',n===name);
+    document.getElementById('sec-'+n).classList.toggle('active',n===name);
+  });
+  fillSelects();
+  if(name==='list')renderList();
+  if(name==='summary')renderSum();
+}
+
+function renderList(){
+  const ym=document.getElementById('list-month')?.value;if(!ym)return;
+  const data=sLoad().filter(r=>toYM(r.date)===ym);
+  document.getElementById('list-count').textContent=`${data.length}件`;
+  const body=document.getElementById('list-body');
+  if(!data.length){body.innerHTML='<div class="empty">この月のデータはありません</div>';return}
+  const byW={};data.forEach(r=>{const w=wn(r.date);if(!byW[w])byW[w]=[];byW[w].push(r)});
+  let html='';
+  Object.keys(byW).sort((a,b)=>+a-+b).forEach(w=>{
+    const rows=byW[w];
+    const wT=rows.reduce((s,r)=>s+r.total,0);
+    const wC=rows.reduce((s,r)=>s+r.cash,0);
+    const wL=rows.reduce((s,r)=>s+r.cl,0);
+    const wG=rows.reduce((s,r)=>s+r.guests,0);
+    html+=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:10px"><table>
+    <thead><tr class="wh"><td colspan="9" style="padding:7px 8px">第${w}週　合計¥${fmt(wT)}（現金¥${fmt(wC)} / CL¥${fmt(wL)}）　${wG}人</td></tr>
+    <tr><th>日</th><th class="nc">曜</th><th class="nr">現金</th><th class="nr">CL</th><th class="nr">合計</th><th class="nr">客数</th><th class="nr">単価</th><th class="nr">P/C</th><th></th></tr></thead><tbody>`;
+    rows.forEach(r=>{
+      const d=di(r.date),up=r.guests?Math.round(r.total/r.guests):0;
+      html+=`<tr>
+        <td>${r.date.slice(5).replace('-','/')}</td>
+        <td class="nc"><span class="db d${d}">${DAYS[d]}</span></td>
+        <td class="nr" style="color:#185fa5">¥${fmt(r.cash)}</td>
+        <td class="nr" style="color:#3b6d11">¥${fmt(r.cl)}</td>
+        <td class="nr fw">¥${fmt(r.total)}</td>
+        <td class="nc">${r.guests}</td>
+        <td class="nr">${up?'¥'+fmt(up):'-'}</td>
+        <td class="nc" style="font-size:11px">${r.perm?'P'+r.perm:''}${r.color?'C'+r.color:''}</td>
+        <td><button class="del-btn" onclick="delEntry('${r.date}')">削除</button></td>
+      </tr>`;
+    });
+    html+='</tbody></table></div>';
+  });
+  body.innerHTML=html;
+}
+
+function delEntry(date){
+  if(!confirm(`${date} のデータを削除しますか？`))return;
+  sPersist(sLoad().filter(r=>r.date!==date));
+  // 比較アプリの日別も削除
+  const dd=hLoadD();
+  if(dd[date]){dd[date].a=0;if(!dd[date].b)delete dd[date];hSaveD(dd);}
+  syncMonthlyFromDaily(date.slice(0,7));
+  renderList();fillSelects();
+}
+
+// ─── 売上管理：CSV ───────────────────────────────
+const CSV_HEADER='日付,曜日,現金,キャッシュレス,合計,男性,女性,小学生,中学生,高校生,客数合計,パーマ,カラーリング';
+function toCSVRow(r){return[r.date,DAYS[di(r.date)],r.cash,r.cl,r.total,r.male||0,r.female||0,r.elem||0,r.mid||0,r.high||0,r.guests||0,r.perm||0,r.color||0].join(',')}
+function exportCSV(){
+  const ym=document.getElementById('list-month')?.value;if(!ym)return;
+  const data=sLoad().filter(r=>toYM(r.date)===ym);
+  if(!data.length){alert('データがありません');return}
+  dlCSV(CSV_HEADER+'\n'+data.map(toCSVRow).join('\n'),`売上_${ym}.csv`);
+}
+function exportAllCSV(){
+  const data=sLoad();
+  if(!data.length){alert('データがありません');return}
+  dlCSV(CSV_HEADER+'\n'+data.map(toCSVRow).join('\n'),'売上_全期間.csv');
+}
+function dlCSV(csv,name){
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();
+}
+function importCSV(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const lines=e.target.result.replace(/^\uFEFF/,'').split('\n').filter(l=>l.trim());
+      if(!lines.length){alert('CSVが空です');return}
+      if(!lines[0].includes('日付')){alert('フォーマットが違います');return}
+      const imported=[];
+      for(let i=1;i<lines.length;i++){
+        const cols=lines[i].split(',');
+        if(cols.length<13||!cols[0].match(/^\d{4}-\d{2}-\d{2}$/))continue;
+        imported.push({date:cols[0],cash:parseInt(cols[2])||0,cl:parseInt(cols[3])||0,total:parseInt(cols[4])||0,male:parseInt(cols[5])||0,female:parseInt(cols[6])||0,elem:parseInt(cols[7])||0,mid:parseInt(cols[8])||0,high:parseInt(cols[9])||0,guests:parseInt(cols[10])||0,perm:parseInt(cols[11])||0,color:parseInt(cols[12])||0});
+      }
+      if(!imported.length){alert('有効なデータが見つかりませんでした');return}
+      const existing=sLoad();let added=0,updated=0;
+      imported.forEach(r=>{const idx=existing.findIndex(e=>e.date===r.date);if(idx>=0){existing[idx]=r;updated++}else{existing.push(r);added++}});
+      existing.sort((a,b)=>a.date.localeCompare(b.date));
+      sPersist(existing);fillSelects();
+      // 比較アプリにも反映
+      syncAllToHikakuSilent(existing);
+      alert(`インポート完了：新規${added}件、更新${updated}件\n（比較アプリにも自動反映しました）`);
+    }catch(err){alert('読み込みエラー：'+err.message)}
+  };
+  reader.readAsText(file,'UTF-8');input.value='';
+}
+function syncAllToHikakuSilent(data){
+  const dd=hLoadD();
+  data.forEach(entry=>{if(!dd[entry.date])dd[entry.date]={a:0,b:0};dd[entry.date].a=entry.total;});
+  hSaveD(dd);
+  const yms=new Set(data.map(r=>toYM(r.date)));
+  yms.forEach(ym=>syncMonthlyFromDaily(ym));
+}
+function deleteSalesAll(){
+  if(!confirm('全データを削除しますか？\nこの操作は取り消せません。'))return;
+  if(!confirm('本当に削除しますか？'))return;
+  localStorage.removeItem(S_KEY);fillSelects();
+  alert('全データを削除しました');
+}
+
+// ─── 売上管理：集計 ──────────────────────────────
+function renderSum(){
+  const ym=document.getElementById('sum-month')?.value;if(!ym)return;
+  const isAll=ym==='all';
+  const data=isAll?sLoad():sLoad().filter(r=>toYM(r.date)===ym);
+  const mT=data.reduce((s,r)=>s+r.total,0),mC=data.reduce((s,r)=>s+r.cash,0),mL=data.reduce((s,r)=>s+r.cl,0);
+  const mG=data.reduce((s,r)=>s+r.guests,0),n=data.length,up=mG?Math.round(mT/mG):0;
+  const periodLabel=isAll?'全期間':'月間';
+  let monthlyHtml='';
+  if(isAll){
+    const byYM={};
+    data.forEach(r=>{const ym2=toYM(r.date);if(!byYM[ym2])byYM[ym2]={t:0,g:0,days:0};byYM[ym2].t+=r.total;byYM[ym2].g+=r.guests;byYM[ym2].days++});
+    monthlyHtml=`<div class="card"><div class="card-title">月別売上</div><table><thead><tr><th>月</th><th class="nr">売上合計</th><th class="nr">客数</th><th class="nr">営業日</th><th class="nr">1日平均</th></tr></thead><tbody>`;
+    Object.keys(byYM).sort().forEach(m=>{const[y,mo]=m.split('-'),mk=byYM[m];monthlyHtml+=`<tr><td>${y}年${parseInt(mo)}月</td><td class="nr fw">¥${fmt(mk.t)}</td><td class="nc">${mk.g}人</td><td class="nc">${mk.days}日</td><td class="nr">¥${fmt(mk.days?mk.t/mk.days:0)}</td></tr>`;});
+    monthlyHtml+='</tbody></table></div>';
+  }
+  document.getElementById('sum-monthly').innerHTML=monthlyHtml;
+  document.getElementById('sum-cards').innerHTML=`
+    <div class="m"><div class="l">${periodLabel}売上合計</div><div class="v">¥${fmt(mT)}</div><div class="s">${n}営業日</div></div>
+    <div class="m"><div class="l">現金合計</div><div class="v" style="color:#185fa5">¥${fmt(mC)}</div></div>
+    <div class="m"><div class="l">CL合計</div><div class="v" style="color:#3b6d11">¥${fmt(mL)}</div></div>
+    <div class="m"><div class="l">${periodLabel}客数</div><div class="v">${mG}人</div></div>
+    <div class="m"><div class="l">1日平均客数</div><div class="v">${n?fmt(mG/n):0}人</div></div>
+    <div class="m"><div class="l">平均客単価</div><div class="v">¥${fmt(up)}</div></div>
+  `;
+  const gK=['male','female','elem','mid','high','perm','color'];
+  const gL=['男性','女性','小学生','中学生','高校生','パーマ','カラー'];
+  const gT=gK.map(k=>data.reduce((s,r)=>s+(r[k]||0),0));
+  let gH='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">';
+  gK.forEach((k,i)=>{if(!gT[i])return;const pct=mG&&i<5?Math.round(gT[i]/mG*100):0;gH+=`<div class="m"><div class="l">${gL[i]}</div><div class="v">${gT[i]}${i<5?'人':''}</div><div class="s">${i<5?pct+'%':''}</div></div>`;});
+  document.getElementById('guest-sum').innerHTML=gH+'</div>';
+  const byD=Array.from({length:7},()=>({t:0,c:0,l:0,g:0,pm:0,cl:0,n:0}));
+  data.forEach(r=>{const i=di(r.date);byD[i].t+=r.total;byD[i].c+=r.cash;byD[i].l+=r.cl;byD[i].g+=r.guests;byD[i].pm+=r.perm||0;byD[i].cl+=r.color||0;byD[i].n++});
+  let dH='';
+  DAYS.forEach((d,i)=>{if(!byD[i].n)return;const up2=byD[i].g?Math.round(byD[i].t/byD[i].g):0;dH+=`<tr><td><span class="db d${i}">${d}</span></td><td class="nr" style="color:#185fa5">¥${fmt(byD[i].c)}</td><td class="nr" style="color:#3b6d11">¥${fmt(byD[i].l)}</td><td class="nr fw">¥${fmt(byD[i].t)}</td><td class="nc">${byD[i].g}</td><td class="nr">${up2?'¥'+fmt(up2):'-'}</td><td class="nc" style="font-size:11px">${byD[i].pm?'P'+byD[i].pm:''}${byD[i].cl?'C'+byD[i].cl:''}</td></tr>`;});
+  document.getElementById('day-sum').innerHTML=dH||'<tr><td colspan="7" class="empty">データなし</td></tr>';
+  const byW={};
+  data.forEach(r=>{const w=wn(r.date);if(!byW[w])byW[w]={t:0,c:0,l:0,g:0,days:0};byW[w].t+=r.total;byW[w].c+=r.cash;byW[w].l+=r.cl;byW[w].g+=r.guests;byW[w].days++});
+  let wH='';
+  Object.keys(byW).sort((a,b)=>+a-+b).forEach(w=>{const wk=byW[w];wH+=`<tr><td>第${w}週</td><td class="nr" style="color:#185fa5">¥${fmt(wk.c)}</td><td class="nr" style="color:#3b6d11">¥${fmt(wk.l)}</td><td class="nr fw">¥${fmt(wk.t)}</td><td class="nc">${wk.g}人</td><td class="nr">¥${fmt(wk.days?wk.t/wk.days:0)}</td></tr>`;});
+  document.getElementById('week-sum').innerHTML=wH||'<tr><td colspan="6" class="empty">データなし</td></tr>';
+  renderChart(data,isAll);
+}
+
+function setChart(mode,btn){
+  chartMode=mode;
+  document.querySelectorAll('.chart-btns .btn').forEach(b=>b.classList.remove('act'));btn.classList.add('act');
+  const ym=document.getElementById('sum-month')?.value;if(!ym)return;
+  const data=ym==='all'?sLoad():sLoad().filter(r=>toYM(r.date)===ym);
+  renderChart(data,ym==='all');
+}
+
+function renderChart(data,isAll=false){
+  if(myChart){myChart.destroy();myChart=null}
+  const ctx=document.getElementById('chart').getContext('2d');
+  let labels=[],datasets=[],leg='';
+  if(chartMode==='sales'){
+    if(isAll){
+      const byYM={};data.forEach(r=>{const m=toYM(r.date);if(!byYM[m])byYM[m]={c:0,l:0};byYM[m].c+=r.cash;byYM[m].l+=r.cl});
+      Object.keys(byYM).sort().forEach(m=>{const[y,mo]=m.split('-');labels.push(`${y}/${parseInt(mo)}月`);});
+      const sorted=Object.keys(byYM).sort();
+      datasets=[{label:'現金',data:sorted.map(m=>byYM[m].c),backgroundColor:'#185fa5',borderRadius:3,borderSkipped:false},{label:'CL',data:sorted.map(m=>byYM[m].l),backgroundColor:'#3b6d11',borderRadius:3,borderSkipped:false}];
+    }else{
+      data.forEach(r=>labels.push(`${r.date.slice(8)}(${DAYS[di(r.date)]})`));
+      datasets=[{label:'現金',data:data.map(r=>r.cash),backgroundColor:'#185fa5',borderRadius:3,borderSkipped:false},{label:'CL',data:data.map(r=>r.cl),backgroundColor:'#3b6d11',borderRadius:3,borderSkipped:false}];
+    }
+    leg='<span><span class="leg-sq" style="background:#185fa5"></span>現金</span><span><span class="leg-sq" style="background:#3b6d11"></span>CL</span>';
+  }else if(chartMode==='guests'){
+    data.forEach(r=>labels.push(`${r.date.slice(8)}(${DAYS[di(r.date)]})`));
+    datasets=[{label:'男性',data:data.map(r=>r.male||0),backgroundColor:'#378ADD',borderRadius:3,borderSkipped:false},{label:'女性',data:data.map(r=>r.female||0),backgroundColor:'#D4537E',borderRadius:3,borderSkipped:false},{label:'小学生',data:data.map(r=>r.elem||0),backgroundColor:'#639922',borderRadius:3,borderSkipped:false},{label:'中学生',data:data.map(r=>r.mid||0),backgroundColor:'#EF9F27',borderRadius:3,borderSkipped:false},{label:'高校生',data:data.map(r=>r.high||0),backgroundColor:'#7F77DD',borderRadius:3,borderSkipped:false}];
+    leg='<span><span class="leg-sq" style="background:#378ADD"></span>男</span><span><span class="leg-sq" style="background:#D4537E"></span>女</span><span><span class="leg-sq" style="background:#639922"></span>小</span><span><span class="leg-sq" style="background:#EF9F27"></span>中</span><span><span class="leg-sq" style="background:#7F77DD"></span>高</span>';
+  }else if(chartMode==='dow'){
+    const byD=Array.from({length:7},()=>({c:0,l:0,n:0}));
+    data.forEach(r=>{const i=di(r.date);byD[i].c+=r.cash;byD[i].l+=r.cl;byD[i].n++});
+    DAYS.forEach((d,i)=>{if(byD[i].n)labels.push(d)});
+    const fl=DAYS.map((d,i)=>byD[i].n?byD[i]:null).filter(Boolean);
+    datasets=[{label:'現金',data:fl.map(r=>r.c),backgroundColor:'#185fa5',borderRadius:3,borderSkipped:false},{label:'CL',data:fl.map(r=>r.l),backgroundColor:'#3b6d11',borderRadius:3,borderSkipped:false}];
+    leg='<span><span class="leg-sq" style="background:#185fa5"></span>現金</span><span><span class="leg-sq" style="background:#3b6d11"></span>CL</span>';
+  }else if(chartMode==='menu'){
+    const md=data.filter(r=>r.perm||r.color);
+    md.forEach(r=>labels.push(`${r.date.slice(8)}(${DAYS[di(r.date)]})`));
+    datasets=[{label:'パーマ',data:md.map(r=>r.perm||0),backgroundColor:'#BA7517',borderRadius:3,borderSkipped:false},{label:'カラー',data:md.map(r=>r.color||0),backgroundColor:'#534AB7',borderRadius:3,borderSkipped:false}];
+    leg='<span><span class="leg-sq" style="background:#BA7517"></span>パーマ</span><span><span class="leg-sq" style="background:#534AB7"></span>カラー</span>';
+    if(!labels.length){labels=['データなし'];datasets=[{label:'',data:[0]}]}
+  }
+  document.getElementById('chart-leg').innerHTML=leg;
+  const isCount=chartMode==='guests'||chartMode==='menu';
+  myChart=new Chart(ctx,{type:'bar',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>isCount?`${c.dataset.label}: ${c.raw}人`:`¥${fmt(c.raw)}`}}},scales:{x:{stacked:true,ticks:{autoSkip:false,maxRotation:45,font:{size:10}}},y:{stacked:true,ticks:{callback:v=>isCount?`${v}人`:`¥${fmt(v)}`,font:{size:10}},grid:{color:'rgba(128,128,128,0.1)'}}}}});
+}
+
+// ═══════════════════════════════════════════════════════
+// 比較アプリ：データ
+// ═══════════════════════════════════════════════════════
+function hLoadM(){try{return JSON.parse(localStorage.getItem(MKEY)||'{}')}catch{return{}}}
+function hLoadD(){try{return JSON.parse(localStorage.getItem(DKEY)||'{}')}catch{return{}}}
+function hSaveM(d){localStorage.setItem(MKEY,JSON.stringify(d))}
+function hSaveD(d){localStorage.setItem(DKEY,JSON.stringify(d))}
+function hGetNames(){try{const n=JSON.parse(localStorage.getItem(NKEY)||'{}');return{a:n.a||'店舗A',b:n.b||'店舗B'}}catch{return{a:'店舗A',b:'店舗B'}}}
+function fmtH(n){return n?Math.round(n).toLocaleString('ja-JP'):'-'}
+function fmtY(n){return n?'¥'+Math.round(n).toLocaleString('ja-JP'):'-'}
+
+function saveNames(){
+  const a=document.getElementById('name-a').value||'店舗A';
+  const b=document.getElementById('name-b').value||'店舗B';
+  localStorage.setItem(NKEY,JSON.stringify({a,b}));
+  hUpdateLabels();renderHikakuAll();
+}
+function hUpdateLabels(){
+  const{a,b}=hGetNames();
+  [['ov-name-a','ov-name-b'],['inp-name-a','inp-name-b'],['dinp-name-a','dinp-name-b'],['dv-name-a','dv-name-b']].forEach(([ia,ib])=>{
+    const ea=document.getElementById(ia),eb=document.getElementById(ib);
+    if(ea)ea.textContent=a;if(eb)eb.textContent=b;
+  });
+  ['yt-a','yr-ha','mo-ha'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=a});
+  ['yt-b','yr-hb','mo-hb'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=b});
+  const na=document.getElementById('name-a'),nb=document.getElementById('name-b');
+  if(na)na.value=a;if(nb)nb.value=b;
+}
+function hGetYears(){
+  const md=hLoadM(),dd=hLoadD();
+  const s=new Set([...Object.keys(md),...Object.keys(dd)].map(k=>k.slice(0,4)));
+  s.add(String(new Date().getFullYear()));
+  return[...s].sort();
+}
+function daysInMonth(y,m){return new Date(y,m,0).getDate()}
+
+// ─── 比較アプリ：タブ切り替え ────────────────────
+function sw_h(name){
+  ['overview','monthly','yearly','input','settings'].forEach((n,i)=>{
+    document.querySelectorAll('#app-hikaku .hiku-tab')[i].classList.toggle('active',n===name);
+    document.getElementById('h-sec-'+n).classList.toggle('active',n===name);
+  });
+  if(name==='monthly')hFillMonthSel();
+  if(name==='input'){hBuildMonthlyForm();hBuildDayForm();}
+  renderHikakuAll();
+}
+
+function changeYear(d){curYear+=d;hUpdateYearLabel();hBuildMonthlyForm();renderHikakuAll()}
+function hUpdateYearLabel(){document.getElementById('year-label').textContent=curYear+'年'}
+
+function hFillMonthSel(){
+  const sel=document.getElementById('mo-month-sel');
+  const prev=sel.value;sel.innerHTML='';
+  const md=hLoadM(),dd=hLoadD();
+  const yms=new Set([...Object.keys(md),...Object.keys(dd)].map(k=>k.slice(0,7)));
+  const now=new Date(),cur=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  yms.add(cur);
+  const sorted=[...yms].sort().reverse();
+  sorted.forEach(ym=>{const[y,m]=ym.split('-');const o=document.createElement('option');o.value=ym;o.textContent=`${y}年${parseInt(m)}月`;sel.appendChild(o)});
+  if(prev&&sorted.includes(prev))sel.value=prev;else sel.value=sorted[0];
+}
+
+function hFillDayInpSels(){
+  const ysel=document.getElementById('day-inp-year');
+  const msel=document.getElementById('day-inp-month');
+  const years=hGetYears().reverse();
+  const now=new Date();
+  ysel.innerHTML='';years.forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent=y+'年';ysel.appendChild(o)});
+  ysel.value=String(now.getFullYear());
+  msel.innerHTML='';MONTHS_H.forEach((m,i)=>{const o=document.createElement('option');o.value=i+1;o.textContent=m;msel.appendChild(o)});
+  msel.value=now.getMonth()+1;
+}
+
+function setMonthView(mode,btn){
+  monthView=mode;
+  document.querySelectorAll('#app-hikaku .view-toggle .vt-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+  document.getElementById('mo-view-month').style.display=mode==='month'?'block':'none';
+  document.getElementById('mo-view-daily').style.display=mode==='daily'?'block':'none';
+  renderMonthly();
+}
+function setInpMode(mode,btn){
+  inpMode=mode;
+  document.querySelectorAll('#app-hikaku .inp-mode-row .vt-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+  document.getElementById('inp-view-month').style.display=mode==='month'?'block':'none';
+  document.getElementById('inp-view-daily').style.display=mode==='daily'?'block':'none';
+}
+
+// ─── 比較アプリ：月次入力フォーム ────────────────
+function hBuildMonthlyForm(){
+  const d=hLoadM();
+  ['a','b'].forEach(s=>{
+    const c=document.getElementById('inp-'+s);if(!c)return;c.innerHTML='';
+    MONTHS_H.forEach((m,i)=>{
+      const key=`${curYear}-${String(i+1).padStart(2,'0')}`;
+      const val=d[key]?d[key][s]:'';
+      const row=document.createElement('div');row.className='month-row';
+      const isAutoA=(s==='a');// 店舗Aは売上管理から自動反映
+      row.innerHTML=`<label>${m}</label><input type="number" id="f-${s}-${i}" value="${val||''}" placeholder="0" min="0" inputmode="numeric" class="${val?'has-val':''}" ${isAutoA?'style="background:#f0f6ff;color:#185fa5"':''} oninput="this.classList.toggle('has-val',!!this.value)">`;
+      c.appendChild(row);
+    });
+  });
+  document.getElementById('inp-title').textContent=`月次売上入力（${curYear}年）`;
+  const{a,b}=hGetNames();
+  document.getElementById('inp-name-a').textContent=a+'（自動）';
+  document.getElementById('inp-name-b').textContent=b;
+}
+
+function saveMonthly(){
+  const d=hLoadM();let changed=0;
+  MONTHS_H.forEach((_,i)=>{
+    const key=`${curYear}-${String(i+1).padStart(2,'0')}`;
+    const va=parseInt(document.getElementById(`f-a-${i}`)?.value)||0;
+    const vb=parseInt(document.getElementById(`f-b-${i}`)?.value)||0;
+    if(va||vb){d[key]={a:va,b:vb};changed++}else if(d[key]&&!d[key].a&&!d[key].b)delete d[key];
+    else if(d[key]){d[key].b=vb;}
+  });
+  hSaveM(d);renderHikakuAll();
+  showHMsg('inp-msg',`保存しました（${changed}ヶ月分）`,'ok');
+}
+
+// ─── 比較アプリ：日別入力フォーム ────────────────
+function hBuildDayForm(){
+  const y=parseInt(document.getElementById('day-inp-year')?.value||curYear);
+  const m=parseInt(document.getElementById('day-inp-month')?.value||(new Date().getMonth()+1));
+  const days=daysInMonth(y,m);
+  const d=hLoadD();
+  const{a:nameA,b:nameB}=hGetNames();
+  const da=document.getElementById('dinp-name-a'),db=document.getElementById('dinp-name-b');
+  if(da)da.textContent=nameA+'（自動）';
+  if(db)db.textContent=nameB;
+  ['a','b'].forEach(s=>{
+    const c=document.getElementById('dinp-'+s);if(!c)return;c.innerHTML='';
+    for(let day=1;day<=days;day++){
+      const key=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const val=d[key]?d[key][s]:'';
+      const row=document.createElement('div');row.className='month-row';
+      const isAutoA=(s==='a');
+      row.innerHTML=`<label>${day}日</label><input type="number" id="d-${s}-${day}" value="${val||''}" placeholder="0" min="0" inputmode="numeric" class="${val?'has-val':''}" ${isAutoA?'readonly style="background:#f0f6ff;color:#185fa5;cursor:default"':''} oninput="this.classList.toggle('has-val',!!this.value)">`;
+      c.appendChild(row);
+    }
+  });
+}
+
+function saveDaily(){
+  const y=parseInt(document.getElementById('day-inp-year')?.value);
+  const m=parseInt(document.getElementById('day-inp-month')?.value);
+  const days=daysInMonth(y,m);
+  const d=hLoadD();let changed=0;
+  for(let day=1;day<=days;day++){
+    const key=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const va=d[key]?d[key].a||0:0;// 店舗Aは売上管理から自動（読み取り専用）
+    const vb=parseInt(document.getElementById(`d-b-${day}`)?.value)||0;
+    if(va||vb){d[key]={a:va,b:vb};changed++}else delete d[key];
+  }
+  hSaveD(d);renderMonthly();
+  showHMsg('dinp-msg',`保存しました（${changed}日分）`,'ok');
+}
+
+function showHMsg(id,text,type){
+  const el=document.getElementById(id);if(!el)return;
+  el.textContent=text;el.className='hiku-msg '+type;el.style.display='block';
+  setTimeout(()=>el.style.display='none',2500);
+}
+
+// ─── 比較アプリ：レンダリング ─────────────────────
+function renderHikakuAll(){renderOverview();renderMonthly();renderYearly()}
+
+function renderOverview(){
+  const d=hLoadM();
+  document.getElementById('ov-month-title').textContent=`月別売上（${curYear}年）`;
+  ['a','b'].forEach(s=>{
+    let cum=0,html='';
+    MONTHS_H.forEach((_,i)=>{
+      const key=`${curYear}-${String(i+1).padStart(2,'0')}`;
+      const val=d[key]?d[key][s]||0:0;cum+=val;
+      html+=`<tr><td>${i+1}月</td><td>${val?'¥'+fmtH(val):'-'}</td><td class="cum">${cum?'¥'+fmtH(cum):'-'}</td></tr>`;
+    });
+    const tot=MONTHS_H.reduce((_,__,i)=>{const k=`${curYear}-${String(i+1).padStart(2,'0')}`;return _+(d[k]?d[k][s]||0:0)},0);
+    html+=`<tr class="total-row"><td>合計</td><td>¥${fmtH(tot)}</td><td></td></tr>`;
+    document.getElementById('ov-'+s).innerHTML=html;
+  });
+  const years=hGetYears(),nowY=new Date().getFullYear();
+  let yh='';
+  years.forEach(y=>{
+    const ta=MONTHS_H.reduce((_,__,i)=>{const k=`${y}-${String(i+1).padStart(2,'0')}`;return _+(d[k]?d[k].a||0:0)},0);
+    const tb=MONTHS_H.reduce((_,__,i)=>{const k=`${y}-${String(i+1).padStart(2,'0')}`;return _+(d[k]?d[k].b||0:0)},0);
+    yh+=`<tr class="${y==nowY?'cur-year':''}"><td>${y}年</td><td class="a-val">${fmtY(ta)}</td><td class="b-val">${fmtY(tb)}</td></tr>`;
+  });
+  document.getElementById('year-body').innerHTML=yh||'<tr><td colspan="3" class="empty-note">データなし</td></tr>';
+  const{a,b}=hGetNames();
+  document.getElementById('yt-a').textContent=a;document.getElementById('yt-b').textContent=b;
+  document.getElementById('ov-name-a').textContent=a;document.getElementById('ov-name-b').textContent=b;
+}
+
+function renderMonthly(){
+  const ym=document.getElementById('mo-month-sel')?.value;if(!ym)return;
+  const[y,m]=ym.split('-').map(Number);
+  const{a:nameA,b:nameB}=hGetNames();
+  const moHa=document.getElementById('mo-ha'),moHb=document.getElementById('mo-hb');
+  if(moHa)moHa.textContent=nameA;if(moHb)moHb.textContent=nameB;
+  const dvA=document.getElementById('dv-name-a'),dvB=document.getElementById('dv-name-b');
+  if(dvA)dvA.textContent=nameA;if(dvB)dvB.textContent=nameB;
+
+  if(monthView==='month'){
+    const d=hLoadM();
+    document.getElementById('mo-title').textContent=`月別詳細（${y}年）`;
+    let html='';
+    const taAll=MONTHS_H.reduce((_,__,i)=>{const k=`${y}-${String(i+1).padStart(2,'0')}`;return _+(d[k]?d[k].a||0:0)},0);
+    const tbAll=MONTHS_H.reduce((_,__,i)=>{const k=`${y}-${String(i+1).padStart(2,'0')}`;return _+(d[k]?d[k].b||0:0)},0);
+    MONTHS_H.forEach((_,i)=>{
+      const key=`${y}-${String(i+1).padStart(2,'0')}`;
+      const va=d[key]?d[key].a||0:0,vb=d[key]?d[key].b||0:0;
+      html+=`<tr><td>${i+1}月</td><td style="color:#185fa5">${va?'¥'+fmtH(va):'-'}</td><td style="color:#c46b00">${vb?'¥'+fmtH(vb):'-'}</td></tr>`;
+    });
+    html+=`<tr class="total-row"><td>合計</td><td style="color:#185fa5">¥${fmtH(taAll)}</td><td style="color:#c46b00">¥${fmtH(tbAll)}</td></tr>`;
+    document.getElementById('mo-body').innerHTML=html;
+  }else{
+    const d=hLoadD();
+    const days=daysInMonth(y,m);
+    document.getElementById('daily-title').textContent=`日別売上（${y}年${m}月）`;
+    ['a','b'].forEach(s=>{
+      let cum=0,html='';
+      for(let day=1;day<=days;day++){
+        const key=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const val=d[key]?d[key][s]||0:0;cum+=val;
+        html+=`<tr><td>${day}日</td><td>${val?'¥'+fmtH(val):'-'}</td><td class="cum">${cum?'¥'+fmtH(cum):'-'}</td></tr>`;
+      }
+      const tot=Array.from({length:days},(_,i)=>{const k=`${y}-${String(m).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;return d[k]?d[k][s]||0:0}).reduce((a,b)=>a+b,0);
+      html+=`<tr class="total-row"><td>合計</td><td>¥${fmtH(tot)}</td><td></td></tr>`;
+      document.getElementById('dv-'+s).innerHTML=html;
+    });
+  }
+}
+
+function renderYearly(){
+  const d=hLoadM();
+  const{a:nameA,b:nameB}=hGetNames();
+  const yrHa=document.getElementById('yr-ha'),yrHb=document.getElementById('yr-hb');
+  if(yrHa)yrHa.textContent=nameA;if(yrHb)yrHb.textContent=nameB;
+  const years=hGetYears(),nowY=new Date().getFullYear();
+  let html='';
+  years.forEach(y=>{
+    const ta=MONTHS_H.reduce((_,__,i)=>{const k=`${y}-${String(i+1).padStart(2,'0')}`;return _+(d[k]?d[k].a||0:0)},0);
+    const tb=MONTHS_H.reduce((_,__,i)=>{const k=`${y}-${String(i+1).padStart(2,'0')}`;return _+(d[k]?d[k].b||0:0)},0);
+    html+=`<tr class="${y==nowY?'cur-year':''}"><td>${y}年</td><td class="a-val">${fmtY(ta)}</td><td class="b-val">${fmtY(tb)}</td></tr>`;
+  });
+  document.getElementById('yr-body').innerHTML=html||'<tr><td colspan="3" class="empty-note">データなし</td></tr>';
+}
+
+// ─── 比較アプリ：CSV ──────────────────────────────
+function hBuildCSV(years){
+  const md=hLoadM(),dd=hLoadD();
+  const{a:nameA,b:nameB}=hGetNames();
+  let csv=`年,月,${nameA}（月次）,${nameB}（月次）\n`;
+  years.forEach(y=>{MONTHS_H.forEach((_,i)=>{const k=`${y}-${String(i+1).padStart(2,'0')}`;const va=md[k]?md[k].a||0:0,vb=md[k]?md[k].b||0:0;if(va||vb)csv+=`${y},${i+1},${va},${vb}\n`;})});
+  csv+=`\n年,月,日,${nameA}（日別）,${nameB}（日別）\n`;
+  const dkeys=[...new Set([...Object.keys(dd)].filter(k=>years.some(y=>k.startsWith(y))))].sort();
+  dkeys.forEach(k=>{const[y2,m2,d2]=k.split('-');const va=dd[k]?dd[k].a||0:0,vb=dd[k]?dd[k].b||0:0;if(va||vb)csv+=`${y2},${parseInt(m2)},${parseInt(d2)},${va},${vb}\n`;});
+  return csv;
+}
+function hDlCSV(csv,name){const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click()}
+function hExportCSV(){hDlCSV(hBuildCSV([String(curYear)]),`店舗売上_${curYear}.csv`)}
+function hExportAllCSV(){hDlCSV(hBuildCSV(hGetYears()),'店舗売上_全期間.csv')}
+function hImportCSV(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const lines=e.target.result.replace(/^\uFEFF/,'').split('\n').filter(l=>l.trim());
+      const md=hLoadM(),dd=hLoadD();let ma=0,da=0;let mode='month';
+      for(let i=1;i<lines.length;i++){
+        const l=lines[i].trim();if(!l)continue;
+        if(l.startsWith('年,月,日')){mode='daily';continue}
+        if(l.startsWith('年,月')){mode='month';continue}
+        const cols=l.split(',');
+        if(mode==='month'&&cols.length>=4){const y=cols[0].trim(),mo=cols[1].trim(),va=parseInt(cols[2])||0,vb=parseInt(cols[3])||0;if(y.match(/^\d{4}$/)&&mo.match(/^\d{1,2}$/)){const k=`${y}-${mo.padStart(2,'0')}`;if(va||vb){md[k]={a:va,b:vb};ma++}}}
+        else if(mode==='daily'&&cols.length>=5){const y=cols[0].trim(),mo=cols[1].trim(),dy=cols[2].trim(),va=parseInt(cols[3])||0,vb=parseInt(cols[4])||0;if(y.match(/^\d{4}$/)&&mo.match(/^\d{1,2}$/)&&dy.match(/^\d{1,2}/)){const k=`${y}-${mo.padStart(2,'0')}-${dy.padStart(2,'0')}`;if(va||vb){dd[k]={a:va,b:vb};da++}}}
+      }
+      hSaveM(md);hSaveD(dd);renderHikakuAll();
+      alert(`インポート完了：月次${ma}件、日別${da}件`);
+    }catch(err){alert('読み込みエラー：'+err.message)}
+  };
+  reader.readAsText(file,'UTF-8');input.value='';
+}
+function hDeleteAll(){
+  if(!confirm('全データを削除しますか？\nこの操作は取り消せません。'))return;
+  if(!confirm('本当に削除しますか？'))return;
+  localStorage.removeItem(MKEY);localStorage.removeItem(DKEY);renderHikakuAll();alert('削除しました');
+}
+
+// ═══════════════════════════════════════════════════════
+// Service Worker & 起動
+// ═══════════════════════════════════════════════════════
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+
+initPin();
+</script>
+</body>
+</html>
