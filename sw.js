@@ -1,5 +1,5 @@
-const CACHE='barber-unified-v1.0.2';
-const ASSETS=['./','./index.html','./manifest.json','./icons/icon-192.png','./icons/icon-512.png'];
+const CACHE='sales-app-icon-20260704';
+const ASSETS=['./','./index.html','./manifest.webmanifest','./manifest.json','./favicon.ico','./favicon-16.png','./favicon-32.png','./icon.svg','./apple-touch-icon.png','./icon-192.png','./icon-512.png','./icon-512-maskable.png','./icons/icon-192.png','./icons/icon-512.png','./icons/icon-512-maskable.png'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));

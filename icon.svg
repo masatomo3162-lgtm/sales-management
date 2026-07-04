@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E9E6B"/>
+      <stop offset="1" stop-color="#155C3C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.12" r="0.9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.6" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F0CB78"/>
+      <stop offset="0.55" stop-color="#C8862F"/>
+      <stop offset="1" stop-color="#8A4E16"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/><rect x="352" y="498" width="108" height="250" rx="30" fill="#ffffff"/><rect x="492" y="388" width="108" height="360" rx="30" fill="#ffffff"/><rect x="632" y="278" width="108" height="470" rx="30" fill="#ffffff"/><rect x="316" y="756" width="392" height="20" rx="10" fill="#ffffff" opacity="0.55"/><polyline points="406,498 546,388 686,278" fill="none" stroke="#BCF0D0" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M686,278 l-8,72 M686,278 l-72,8" fill="none" stroke="#BCF0D0" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><circle cx="406" cy="498" r="20" fill="#BCF0D0"/><circle cx="546" cy="388" r="20" fill="#BCF0D0"/></svg>
