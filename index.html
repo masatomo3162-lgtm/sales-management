@@ -521,8 +521,8 @@ select:focus{outline:none;border-color:#185fa5}
         <div class="card" style="padding:0;overflow:hidden">
           <div class="card-title" style="padding:12px 16px 8px">日別売上入力</div>
           <div class="day-inp-sel">
-            <select id="day-inp-year" onchange="buildDayForm()"></select>
-            <select id="day-inp-month" onchange="buildDayForm()"></select>
+            <select id="day-inp-year" onchange="hBuildDayForm()"></select>
+            <select id="day-inp-month" onchange="hBuildDayForm()"></select>
           </div>
           <div class="day-inp-grid">
             <div class="day-inp-col">
@@ -751,13 +751,47 @@ function initAllApps(){
 // ═══════════════════════════════════════════════════════
 // 売上管理：データ
 // ═══════════════════════════════════════════════════════
-function sLoad(){try{return JSON.parse(localStorage.getItem(S_KEY)||'[]')}catch{return[]}}
+function sLoad(){
+  try{const d=JSON.parse(localStorage.getItem(S_KEY)||'[]');return Array.isArray(d)?d:[]}
+  catch{return[]}
+}
 function sPersist(d){localStorage.setItem(S_KEY,JSON.stringify(d))}
+function safeInt(v){
+  const n=Number.parseInt(String(v??'').replace(/,/g,'').trim(),10);
+  return Number.isFinite(n)&&n>0?n:0;
+}
+function isValidISODate(s){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;
+  const[y,m,d]=s.split('-').map(Number);
+  const dt=new Date(Date.UTC(y,m-1,d));
+  return dt.getUTCFullYear()===y&&dt.getUTCMonth()===m-1&&dt.getUTCDate()===d;
+}
+function parseCSV(text){
+  const rows=[];let row=[],cell='',quoted=false;
+  const src=String(text??'').replace(/^\uFEFF/,'');
+  for(let i=0;i<src.length;i++){
+    const ch=src[i];
+    if(quoted){
+      if(ch==='"'&&src[i+1]==='"'){cell+='"';i++;}
+      else if(ch==='"')quoted=false;
+      else cell+=ch;
+    }else if(ch==='"'&&cell==='')quoted=true;
+    else if(ch===','){row.push(cell);cell='';}
+    else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell='';}
+    else if(ch!=='\r')cell+=ch;
+  }
+  if(cell!==''||row.length){row.push(cell);rows.push(row)}
+  return rows.filter(r=>r.some(v=>String(v).trim()!==''));
+}
+function csvCell(v){
+  const s=String(v??'');
+  return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;
+}
 function fmt(n){return Math.round(n).toLocaleString('ja-JP')}
 function toYM(s){return s.slice(0,7)}
 function di(s){return new Date(s+'T00:00:00').getDay()}
 function wn(s){const d=new Date(s+'T00:00:00');return Math.ceil(d.getDate()/7)}
-function ints(id){return parseInt(document.getElementById(id).value)||0}
+function ints(id){return safeInt(document.getElementById(id).value)}
 
 function months(data){
   const s=new Set(data.map(r=>toYM(r.date)));
@@ -846,16 +880,7 @@ function syncMonthlyFromDaily(ym){
 function syncAllToHikaku(){
   const data=sLoad();
   if(!data.length){alert('売上データがありません');return}
-  const dd=hLoadD();
-  // まず全日別データのAを上書き
-  data.forEach(entry=>{
-    if(!dd[entry.date])dd[entry.date]={a:0,b:0};
-    dd[entry.date].a=entry.total;
-  });
-  hSaveD(dd);
-  // 月次も全月再集計
-  const yms=new Set(data.map(r=>toYM(r.date)));
-  yms.forEach(ym=>syncMonthlyFromDaily(ym));
+  syncAllToHikakuSilent(data,true);
   alert(`同期完了：${data.length}件を比較アプリに反映しました`);
 }
 
@@ -939,7 +964,7 @@ function delEntry(date){
 
 // ─── 売上管理：CSV ───────────────────────────────
 const CSV_HEADER='日付,曜日,現金,キャッシュレス,合計,男性,女性,小学生,中学生,高校生,客数合計,パーマ,カラーリング';
-function toCSVRow(r){return[r.date,DAYS[di(r.date)],r.cash,r.cl,r.total,r.male||0,r.female||0,r.elem||0,r.mid||0,r.high||0,r.guests||0,r.perm||0,r.color||0].join(',')}
+function toCSVRow(r){return[r.date,DAYS[di(r.date)],r.cash,r.cl,r.total,r.male||0,r.female||0,r.elem||0,r.mid||0,r.high||0,r.guests||0,r.perm||0,r.color||0].map(csvCell).join(',')}
 function exportCSV(){
   const ym=document.getElementById('list-month')?.value;if(!ym)return;
   const data=sLoad().filter(r=>toYM(r.date)===ym);
@@ -953,47 +978,83 @@ function exportAllCSV(){
 }
 function dlCSV(csv,name){
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();
+  const a=document.createElement('a'),url=URL.createObjectURL(blob);
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function importCSV(input){
   const file=input.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=e=>{
     try{
-      const lines=e.target.result.replace(/^\uFEFF/,'').split('\n').filter(l=>l.trim());
-      if(!lines.length){alert('CSVが空です');return}
-      if(!lines[0].includes('日付')){alert('フォーマットが違います');return}
+      const rows=parseCSV(e.target.result);
+      if(!rows.length){alert('CSVが空です');return}
+      const headerIndex=rows.findIndex(r=>r.some(c=>String(c).trim()==='日付'));
+      if(headerIndex<0){alert('フォーマットが違います（日付列がありません）');return}
+      const header=rows[headerIndex].map(c=>String(c).trim());
+      const col=name=>header.indexOf(name);
+      const required=['日付','現金','キャッシュレス'];
+      if(required.some(name=>col(name)<0)){alert('フォーマットが違います（必要な列がありません）');return}
       const imported=[];
-      for(let i=1;i<lines.length;i++){
-        const cols=lines[i].split(',');
-        if(cols.length<13||!cols[0].match(/^\d{4}-\d{2}-\d{2}$/))continue;
-        imported.push({date:cols[0],cash:parseInt(cols[2])||0,cl:parseInt(cols[3])||0,total:parseInt(cols[4])||0,male:parseInt(cols[5])||0,female:parseInt(cols[6])||0,elem:parseInt(cols[7])||0,mid:parseInt(cols[8])||0,high:parseInt(cols[9])||0,guests:parseInt(cols[10])||0,perm:parseInt(cols[11])||0,color:parseInt(cols[12])||0});
+      for(let i=headerIndex+1;i<rows.length;i++){
+        const cols=rows[i],date=String(cols[col('日付')]??'').trim();
+        if(!isValidISODate(date))continue;
+        const cash=safeInt(cols[col('現金')]),cl=safeInt(cols[col('キャッシュレス')]);
+        const male=col('男性')>=0?safeInt(cols[col('男性')]):0;
+        const female=col('女性')>=0?safeInt(cols[col('女性')]):0;
+        const elem=col('小学生')>=0?safeInt(cols[col('小学生')]):0;
+        const mid=col('中学生')>=0?safeInt(cols[col('中学生')]):0;
+        const high=col('高校生')>=0?safeInt(cols[col('高校生')]):0;
+        const csvTotal=col('合計')>=0?safeInt(cols[col('合計')]):0;
+        const csvGuests=col('客数合計')>=0?safeInt(cols[col('客数合計')]):0;
+        imported.push({
+          date,cash,cl,total:(cash+cl)||csvTotal,
+          male,female,elem,mid,high,guests:(male+female+elem+mid+high)||csvGuests,
+          perm:col('パーマ')>=0?safeInt(cols[col('パーマ')]):0,
+          color:col('カラーリング')>=0?safeInt(cols[col('カラーリング')]):0
+        });
       }
       if(!imported.length){alert('有効なデータが見つかりませんでした');return}
       const existing=sLoad();let added=0,updated=0;
       imported.forEach(r=>{const idx=existing.findIndex(e=>e.date===r.date);if(idx>=0){existing[idx]=r;updated++}else{existing.push(r);added++}});
       existing.sort((a,b)=>a.date.localeCompare(b.date));
       sPersist(existing);fillSelects();
-      // 比較アプリにも反映
-      syncAllToHikakuSilent(existing);
+      syncAllToHikakuSilent(existing,true);
       alert(`インポート完了：新規${added}件、更新${updated}件\n（比較アプリにも自動反映しました）`);
     }catch(err){alert('読み込みエラー：'+err.message)}
+    finally{input.value=''}
   };
-  reader.readAsText(file,'UTF-8');input.value='';
+  reader.onerror=()=>{alert('ファイルを読み込めませんでした');input.value=''};
+  reader.readAsText(file,'UTF-8');
 }
-function syncAllToHikakuSilent(data){
-  const dd=hLoadD();
+function syncAllToHikakuSilent(data,removeStale=false){
+  const dd=hLoadD(),dates=new Set(data.map(r=>r.date)),affected=new Set(data.map(r=>toYM(r.date)));
+  if(removeStale){
+    Object.keys(dd).forEach(date=>{
+      if(!isValidISODate(date)||dates.has(date)||!(dd[date]?.a||0))return;
+      affected.add(toYM(date));dd[date].a=0;
+      if(!dd[date].b)delete dd[date];
+    });
+  }
   data.forEach(entry=>{if(!dd[entry.date])dd[entry.date]={a:0,b:0};dd[entry.date].a=entry.total;});
   hSaveD(dd);
-  const yms=new Set(data.map(r=>toYM(r.date)));
-  yms.forEach(ym=>syncMonthlyFromDaily(ym));
+  affected.forEach(ym=>syncMonthlyFromDaily(ym));
 }
+
 function deleteSalesAll(){
   if(!confirm('全データを削除しますか？\nこの操作は取り消せません。'))return;
   if(!confirm('本当に削除しますか？'))return;
+  const sales=sLoad(),dd=hLoadD(),affected=new Set();
+  sales.forEach(r=>{
+    affected.add(toYM(r.date));
+    if(dd[r.date]){dd[r.date].a=0;if(!dd[r.date].b)delete dd[r.date]}
+  });
+  hSaveD(dd);affected.forEach(ym=>syncMonthlyFromDaily(ym));
   localStorage.removeItem(S_KEY);fillSelects();
-  alert('全データを削除しました');
+  document.getElementById('today-box').style.display='none';
+  alert('売上データを削除し、比較アプリの連携分も更新しました');
 }
+
 
 // ─── 売上管理：集計 ──────────────────────────────
 function renderSum(){
@@ -1049,6 +1110,10 @@ function setChart(mode,btn){
 
 function renderChart(data,isAll=false){
   if(myChart){myChart.destroy();myChart=null}
+  if(typeof Chart==='undefined'){
+    document.getElementById('chart-leg').textContent='グラフを読み込めませんでした。通信状態を確認して再読み込みしてください。';
+    return;
+  }
   const ctx=document.getElementById('chart').getContext('2d');
   let labels=[],datasets=[],leg='';
   if(chartMode==='sales'){
@@ -1088,8 +1153,8 @@ function renderChart(data,isAll=false){
 // ═══════════════════════════════════════════════════════
 // 比較アプリ：データ
 // ═══════════════════════════════════════════════════════
-function hLoadM(){try{return JSON.parse(localStorage.getItem(MKEY)||'{}')}catch{return{}}}
-function hLoadD(){try{return JSON.parse(localStorage.getItem(DKEY)||'{}')}catch{return{}}}
+function hLoadM(){try{const d=JSON.parse(localStorage.getItem(MKEY)||'{}');return d&&typeof d==='object'&&!Array.isArray(d)?d:{}}catch{return{}}}
+function hLoadD(){try{const d=JSON.parse(localStorage.getItem(DKEY)||'{}');return d&&typeof d==='object'&&!Array.isArray(d)?d:{}}catch{return{}}}
 function hSaveM(d){localStorage.setItem(MKEY,JSON.stringify(d))}
 function hSaveD(d){localStorage.setItem(DKEY,JSON.stringify(d))}
 function hGetNames(){try{const n=JSON.parse(localStorage.getItem(NKEY)||'{}');return{a:n.a||'店舗A',b:n.b||'店舗B'}}catch{return{a:'店舗A',b:'店舗B'}}}
@@ -1338,14 +1403,14 @@ function renderYearly(){
 function hBuildCSV(years){
   const md=hLoadM(),dd=hLoadD();
   const{a:nameA,b:nameB}=hGetNames();
-  let csv=`年,月,${nameA}（月次）,${nameB}（月次）\n`;
-  years.forEach(y=>{MONTHS_H.forEach((_,i)=>{const k=`${y}-${String(i+1).padStart(2,'0')}`;const va=md[k]?md[k].a||0:0,vb=md[k]?md[k].b||0:0;if(va||vb)csv+=`${y},${i+1},${va},${vb}\n`;})});
-  csv+=`\n年,月,日,${nameA}（日別）,${nameB}（日別）\n`;
+  let csv=['年','月',`${nameA}（月次）`,`${nameB}（月次）`].map(csvCell).join(',')+'\n';
+  years.forEach(y=>{MONTHS_H.forEach((_,i)=>{const k=`${y}-${String(i+1).padStart(2,'0')}`;const va=md[k]?md[k].a||0:0,vb=md[k]?md[k].b||0:0;if(va||vb)csv+=[y,i+1,va,vb].map(csvCell).join(',')+'\n';})});
+  csv+='\n'+['年','月','日',`${nameA}（日別）`,`${nameB}（日別）`].map(csvCell).join(',')+'\n';
   const dkeys=[...new Set([...Object.keys(dd)].filter(k=>years.some(y=>k.startsWith(y))))].sort();
-  dkeys.forEach(k=>{const[y2,m2,d2]=k.split('-');const va=dd[k]?dd[k].a||0:0,vb=dd[k]?dd[k].b||0:0;if(va||vb)csv+=`${y2},${parseInt(m2)},${parseInt(d2)},${va},${vb}\n`;});
-  return csv;
+  dkeys.forEach(k=>{const[y2,m2,d2]=k.split('-');const va=dd[k]?dd[k].a||0:0,vb=dd[k]?dd[k].b||0:0;if(va||vb)csv+=[y2,parseInt(m2),parseInt(d2),va,vb].map(csvCell).join(',')+'\n';});
+  return csv.replace(/\n$/,'');
 }
-function hDlCSV(csv,name){const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click()}
+function hDlCSV(csv,name){dlCSV(csv,name)}
 function hExportCSV(){hDlCSV(hBuildCSV([String(curYear)]),`店舗売上_${curYear}.csv`)}
 function hExportAllCSV(){hDlCSV(hBuildCSV(hGetYears()),'店舗売上_全期間.csv')}
 function hImportCSV(input){
@@ -1353,22 +1418,40 @@ function hImportCSV(input){
   const reader=new FileReader();
   reader.onload=e=>{
     try{
-      const lines=e.target.result.replace(/^\uFEFF/,'').split('\n').filter(l=>l.trim());
-      const md=hLoadM(),dd=hLoadD();let ma=0,da=0;let mode='month';
-      for(let i=1;i<lines.length;i++){
-        const l=lines[i].trim();if(!l)continue;
-        if(l.startsWith('年,月,日')){mode='daily';continue}
-        if(l.startsWith('年,月')){mode='month';continue}
-        const cols=l.split(',');
-        if(mode==='month'&&cols.length>=4){const y=cols[0].trim(),mo=cols[1].trim(),va=parseInt(cols[2])||0,vb=parseInt(cols[3])||0;if(y.match(/^\d{4}$/)&&mo.match(/^\d{1,2}$/)){const k=`${y}-${mo.padStart(2,'0')}`;if(va||vb){md[k]={a:va,b:vb};ma++}}}
-        else if(mode==='daily'&&cols.length>=5){const y=cols[0].trim(),mo=cols[1].trim(),dy=cols[2].trim(),va=parseInt(cols[3])||0,vb=parseInt(cols[4])||0;if(y.match(/^\d{4}$/)&&mo.match(/^\d{1,2}$/)&&dy.match(/^\d{1,2}/)){const k=`${y}-${mo.padStart(2,'0')}-${dy.padStart(2,'0')}`;if(va||vb){dd[k]={a:va,b:vb};da++}}}
+      const rows=parseCSV(e.target.result),md=hLoadM(),dd=hLoadD();
+      let ma=0,da=0,mode='';
+      for(const raw of rows){
+        const cols=raw.map(c=>String(c).trim());
+        if(cols[0]==='年'&&cols[1]==='月'&&cols[2]==='日'){mode='daily';continue}
+        if(cols[0]==='年'&&cols[1]==='月'){mode='month';continue}
+        if(mode==='month'&&cols.length>=4){
+          const y=cols[0],mo=cols[1],va=safeInt(cols[2]),vb=safeInt(cols[3]);
+          const yn=Number(y),mn=Number(mo);
+          if(/^\d{4}$/.test(y)&&Number.isInteger(mn)&&mn>=1&&mn<=12){
+            const k=`${yn}-${String(mn).padStart(2,'0')}`;
+            if(va||vb)md[k]={a:va,b:vb};else delete md[k];
+            ma++;
+          }
+        }else if(mode==='daily'&&cols.length>=5){
+          const y=cols[0],mo=cols[1],dy=cols[2],va=safeInt(cols[3]),vb=safeInt(cols[4]);
+          const yn=Number(y),mn=Number(mo),dn=Number(dy);
+          const date=`${yn}-${String(mn).padStart(2,'0')}-${String(dn).padStart(2,'0')}`;
+          if(/^\d{4}$/.test(y)&&isValidISODate(date)){
+            if(va||vb)dd[date]={a:va,b:vb};else delete dd[date];
+            da++;
+          }
+        }
       }
-      hSaveM(md);hSaveD(dd);renderHikakuAll();
+      if(!ma&&!da){alert('有効なデータが見つかりませんでした');return}
+      hSaveM(md);hSaveD(dd);hFillMonthSel();hFillDayInpSels();hBuildMonthlyForm();hBuildDayForm();renderHikakuAll();
       alert(`インポート完了：月次${ma}件、日別${da}件`);
     }catch(err){alert('読み込みエラー：'+err.message)}
+    finally{input.value=''}
   };
-  reader.readAsText(file,'UTF-8');input.value='';
+  reader.onerror=()=>{alert('ファイルを読み込めませんでした');input.value=''};
+  reader.readAsText(file,'UTF-8');
 }
+
 function hDeleteAll(){
   if(!confirm('全データを削除しますか？\nこの操作は取り消せません。'))return;
   if(!confirm('本当に削除しますか？'))return;
