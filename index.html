@@ -162,6 +162,10 @@ select:focus{outline:none;border-color:#185fa5}
 .view-toggle{display:flex;gap:4px}
 .vt-btn{padding:6px 12px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #ddd;background:#fff;color:#888}
 .vt-btn.active{background:#185fa5;color:#fff;border-color:#185fa5}
+.card-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px 8px}
+.card-title-row .card-title{padding:0!important;margin:0}
+.edit-link-btn{padding:6px 11px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid #b5d4f4;background:#e6f1fb;color:#185fa5;white-space:nowrap}
+.edit-link-btn:hover{background:#d7eafd}
 .daily-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
 .daily-col:first-child{border-right:1px solid #f0f0ec}
 .daily-table{width:100%;border-collapse:collapse}
@@ -200,6 +204,7 @@ select:focus{outline:none;border-color:#185fa5}
 .hiku-msg{font-size:13px;padding:9px 14px;margin:0 14px 14px;border-radius:8px;display:none}
 .hiku-msg.ok{background:#eaf3de;color:#3b6d11}
 .hiku-msg.err{background:#fcebeb;color:#a32d2d}
+.edit-note{font-size:11px;line-height:1.55;color:#777;background:#fafaf8;border-top:1px solid #f0f0ec;padding:10px 14px;margin-bottom:12px}
 
 /* ── 比較アプリ：設定 ── */
 .setting-row{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #f0f0ec}
@@ -215,6 +220,12 @@ select:focus{outline:none;border-color:#185fa5}
 .synced-cell{position:relative}
 .synced-cell::after{content:'✂';font-size:8px;color:#185fa5;opacity:0.5;margin-left:2px}
 
+@media(max-width:520px){
+  .inp-grid,.day-inp-grid{grid-template-columns:1fr}
+  .inp-grid{gap:0}
+  .inp-grid .inp-col-b{border-top:1px solid #f0f0ec;padding-top:12px;margin-top:4px}
+  .day-inp-col:first-child{border-right:none;border-bottom:1px solid #f0f0ec}
+}
 @media(max-width:400px){
   .mg{grid-template-columns:repeat(2,1fr)}
   .cnt-grid{grid-template-columns:repeat(2,1fr)}
@@ -395,7 +406,7 @@ select:focus{outline:none;border-color:#185fa5}
       <div class="card">
         <div class="card-title">アプリについて</div>
         <div class="settings-item">
-          <div><div class="si-label">床屋 管理アプリ</div><div class="si-sub">ver 3.0（統合版）— データはこのデバイスに保存されます</div></div>
+          <div><div class="si-label">床屋 管理アプリ</div><div class="si-sub">ver 3.0.2（統合版）— データはこのデバイスに保存されます</div></div>
         </div>
       </div>
     </div>
@@ -416,7 +427,7 @@ select:focus{outline:none;border-color:#185fa5}
       <button class="hiku-tab active" onclick="sw_h('overview')">概要</button>
       <button class="hiku-tab" onclick="sw_h('monthly')">月別</button>
       <button class="hiku-tab" onclick="sw_h('yearly')">年別</button>
-      <button class="hiku-tab" onclick="sw_h('input')">入力</button>
+      <button class="hiku-tab" onclick="sw_h('input')">入力・編集</button>
       <button class="hiku-tab" onclick="sw_h('settings')">設定</button>
     </div>
 
@@ -459,7 +470,10 @@ select:focus{outline:none;border-color:#185fa5}
       </div>
       <div id="mo-view-month">
         <div class="card" style="padding:0;overflow:hidden">
-          <div class="card-title" id="mo-title" style="padding:12px 16px 8px">月別詳細</div>
+          <div class="card-title-row">
+            <div class="card-title" id="mo-title">月別詳細</div>
+            <button class="edit-link-btn" onclick="openComparisonEditor('month')">月次を編集</button>
+          </div>
           <table class="mo-full-table">
             <thead><tr><th>月</th><th id="mo-ha" style="text-align:right">店舗A</th><th id="mo-hb" style="text-align:right">店舗B</th></tr></thead>
             <tbody id="mo-body"></tbody>
@@ -468,7 +482,10 @@ select:focus{outline:none;border-color:#185fa5}
       </div>
       <div id="mo-view-daily" style="display:none">
         <div class="card" style="padding:0;overflow:hidden">
-          <div class="card-title" id="daily-title" style="padding:12px 16px 8px">日別売上</div>
+          <div class="card-title-row">
+            <div class="card-title" id="daily-title">日別売上</div>
+            <button class="edit-link-btn" onclick="openComparisonEditor('daily')">日別を編集</button>
+          </div>
           <div class="daily-grid">
             <div class="daily-col">
               <div class="store-header sh-a" style="padding:7px 10px"><span class="store-dot dot-a"></span><span id="dv-name-a">店舗A</span></div>
@@ -502,7 +519,7 @@ select:focus{outline:none;border-color:#185fa5}
       </div>
       <div id="inp-view-month">
         <div class="card" style="padding:0;overflow:hidden">
-          <div class="card-title" id="inp-title" style="padding:12px 16px 8px">月次売上入力</div>
+          <div class="card-title" id="inp-title" style="padding:12px 16px 8px">月次売上入力・編集</div>
           <div class="inp-grid">
             <div class="inp-col">
               <div class="inp-col-title it-a"><span class="store-dot dot-a"></span><span id="inp-name-a">店舗A</span></div>
@@ -513,13 +530,14 @@ select:focus{outline:none;border-color:#185fa5}
               <div id="inp-b"></div>
             </div>
           </div>
+          <div class="edit-note">既存値は上書きできます。月次と日別は別々に保存されます。店舗Aは売上管理の再同期で上書きされる場合があります。</div>
           <div class="hiku-msg" id="inp-msg"></div>
-          <button class="hiku-save-btn" onclick="saveMonthly()">保存する</button>
+          <button class="hiku-save-btn" onclick="saveMonthly()">変更を保存する</button>
         </div>
       </div>
       <div id="inp-view-daily" style="display:none">
         <div class="card" style="padding:0;overflow:hidden">
-          <div class="card-title" style="padding:12px 16px 8px">日別売上入力</div>
+          <div class="card-title" style="padding:12px 16px 8px">日別売上入力・編集</div>
           <div class="day-inp-sel">
             <select id="day-inp-year" onchange="hBuildDayForm()"></select>
             <select id="day-inp-month" onchange="hBuildDayForm()"></select>
@@ -534,8 +552,9 @@ select:focus{outline:none;border-color:#185fa5}
               <div id="dinp-b"></div>
             </div>
           </div>
+          <div class="edit-note">既存値は上書き・0円で削除できます。月次と日別は別々に保存されます。店舗Aは売上管理の再同期で上書きされる場合があります。</div>
           <div class="hiku-msg" id="dinp-msg"></div>
-          <button class="hiku-save-btn" onclick="saveDaily()">保存する</button>
+          <button class="hiku-save-btn" onclick="saveDaily()">変更を保存する</button>
         </div>
       </div>
     </div>
@@ -1232,9 +1251,32 @@ function setMonthView(mode,btn){
 }
 function setInpMode(mode,btn){
   inpMode=mode;
-  document.querySelectorAll('#app-hikaku .inp-mode-row .vt-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+  document.querySelectorAll('#app-hikaku .inp-mode-row .vt-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
   document.getElementById('inp-view-month').style.display=mode==='month'?'block':'none';
   document.getElementById('inp-view-daily').style.display=mode==='daily'?'block':'none';
+}
+
+function openComparisonEditor(mode){
+  const ym=document.getElementById('mo-month-sel')?.value;
+  if(!ym)return;
+  const[y,m]=ym.split('-').map(Number);
+  curYear=y;hUpdateYearLabel();
+  sw_h('input');
+  const buttons=document.querySelectorAll('#app-hikaku .inp-mode-row .vt-btn');
+  if(mode==='daily'){
+    setInpMode('daily',buttons[1]);
+    hFillDayInpSels();
+    const ysel=document.getElementById('day-inp-year');
+    const msel=document.getElementById('day-inp-month');
+    if(ysel)ysel.value=String(y);
+    if(msel)msel.value=String(m);
+    hBuildDayForm();
+  }else{
+    setInpMode('month',buttons[0]);
+    hBuildMonthlyForm();
+  }
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 // ─── 比較アプリ：月次入力フォーム ────────────────
@@ -1246,28 +1288,33 @@ function hBuildMonthlyForm(){
       const key=`${curYear}-${String(i+1).padStart(2,'0')}`;
       const val=d[key]?d[key][s]:'';
       const row=document.createElement('div');row.className='month-row';
-      const isAutoA=(s==='a');// 店舗Aは売上管理から自動反映
-      row.innerHTML=`<label>${m}</label><input type="number" id="f-${s}-${i}" value="${val||''}" placeholder="0" min="0" inputmode="numeric" class="${val?'has-val':''}" ${isAutoA?'style="background:#f0f6ff;color:#185fa5"':''} oninput="this.classList.toggle('has-val',!!this.value)">`;
+      row.innerHTML=`<label>${m}</label><input type="number" id="f-${s}-${i}" value="${val||''}" placeholder="0" min="0" inputmode="numeric" class="${val?'has-val':''}" oninput="this.classList.toggle('has-val',!!this.value)">`;
       c.appendChild(row);
     });
   });
-  document.getElementById('inp-title').textContent=`月次売上入力（${curYear}年）`;
+  document.getElementById('inp-title').textContent=`月次売上入力・編集（${curYear}年）`;
   const{a,b}=hGetNames();
-  document.getElementById('inp-name-a').textContent=a+'（自動）';
+  document.getElementById('inp-name-a').textContent=a+'（売上管理連携・編集可）';
   document.getElementById('inp-name-b').textContent=b;
 }
 
 function saveMonthly(){
-  const d=hLoadM();let changed=0;
+  const d=hLoadM();let changed=0,deleted=0;
   MONTHS_H.forEach((_,i)=>{
     const key=`${curYear}-${String(i+1).padStart(2,'0')}`;
-    const va=parseInt(document.getElementById(`f-a-${i}`)?.value)||0;
-    const vb=parseInt(document.getElementById(`f-b-${i}`)?.value)||0;
-    if(va||vb){d[key]={a:va,b:vb};changed++}else if(d[key]&&!d[key].a&&!d[key].b)delete d[key];
-    else if(d[key]){d[key].b=vb;}
+    const before=d[key]||{a:0,b:0};
+    const va=safeInt(document.getElementById(`f-a-${i}`)?.value);
+    const vb=safeInt(document.getElementById(`f-b-${i}`)?.value);
+    if(va||vb){
+      if((before.a||0)!==va||(before.b||0)!==vb)changed++;
+      d[key]={a:va,b:vb};
+    }else{
+      if(d[key])deleted++;
+      delete d[key];
+    }
   });
-  hSaveM(d);renderHikakuAll();
-  showHMsg('inp-msg',`保存しました（${changed}ヶ月分）`,'ok');
+  hSaveM(d);hFillMonthSel();renderHikakuAll();
+  showHMsg('inp-msg',`保存しました（変更${changed}件・削除${deleted}件）`,'ok');
 }
 
 // ─── 比較アプリ：日別入力フォーム ────────────────
@@ -1278,7 +1325,7 @@ function hBuildDayForm(){
   const d=hLoadD();
   const{a:nameA,b:nameB}=hGetNames();
   const da=document.getElementById('dinp-name-a'),db=document.getElementById('dinp-name-b');
-  if(da)da.textContent=nameA+'（自動）';
+  if(da)da.textContent=nameA+'（売上管理連携・編集可）';
   if(db)db.textContent=nameB;
   ['a','b'].forEach(s=>{
     const c=document.getElementById('dinp-'+s);if(!c)return;c.innerHTML='';
@@ -1286,8 +1333,7 @@ function hBuildDayForm(){
       const key=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
       const val=d[key]?d[key][s]:'';
       const row=document.createElement('div');row.className='month-row';
-      const isAutoA=(s==='a');
-      row.innerHTML=`<label>${day}日</label><input type="number" id="d-${s}-${day}" value="${val||''}" placeholder="0" min="0" inputmode="numeric" class="${val?'has-val':''}" ${isAutoA?'readonly style="background:#f0f6ff;color:#185fa5;cursor:default"':''} oninput="this.classList.toggle('has-val',!!this.value)">`;
+      row.innerHTML=`<label>${day}日</label><input type="number" id="d-${s}-${day}" value="${val||''}" placeholder="0" min="0" inputmode="numeric" class="${val?'has-val':''}" oninput="this.classList.toggle('has-val',!!this.value)">`;
       c.appendChild(row);
     }
   });
@@ -1296,16 +1342,24 @@ function hBuildDayForm(){
 function saveDaily(){
   const y=parseInt(document.getElementById('day-inp-year')?.value);
   const m=parseInt(document.getElementById('day-inp-month')?.value);
+  if(!Number.isInteger(y)||!Number.isInteger(m)||m<1||m>12){showHMsg('dinp-msg','年月を確認してください','err');return}
   const days=daysInMonth(y,m);
-  const d=hLoadD();let changed=0;
+  const d=hLoadD();let changed=0,deleted=0;
   for(let day=1;day<=days;day++){
     const key=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const va=d[key]?d[key].a||0:0;// 店舗Aは売上管理から自動（読み取り専用）
-    const vb=parseInt(document.getElementById(`d-b-${day}`)?.value)||0;
-    if(va||vb){d[key]={a:va,b:vb};changed++}else delete d[key];
+    const before=d[key]||{a:0,b:0};
+    const va=safeInt(document.getElementById(`d-a-${day}`)?.value);
+    const vb=safeInt(document.getElementById(`d-b-${day}`)?.value);
+    if(va||vb){
+      if((before.a||0)!==va||(before.b||0)!==vb)changed++;
+      d[key]={a:va,b:vb};
+    }else{
+      if(d[key])deleted++;
+      delete d[key];
+    }
   }
-  hSaveD(d);renderMonthly();
-  showHMsg('dinp-msg',`保存しました（${changed}日分）`,'ok');
+  hSaveD(d);hFillMonthSel();renderHikakuAll();
+  showHMsg('dinp-msg',`保存しました（変更${changed}件・削除${deleted}件）`,'ok');
 }
 
 function showHMsg(id,text,type){
