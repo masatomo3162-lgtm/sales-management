@@ -3,18 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>床屋 管理アプリ</title>
-<!-- App icons / PWA -->
-<link rel="icon" href="./favicon.ico?v=20260704" sizes="any">
-<link rel="icon" href="./icon.svg?v=20260704" type="image/svg+xml">
-<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png?v=20260704">
-<link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png?v=20260704">
-<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260704">
-<link rel="manifest" href="./manifest.webmanifest?v=20260704">
-<meta name="theme-color" content="#2E9E6B">
+<meta name="theme-color" content="#185fa5">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="売上">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="床屋管理">
+<title>床屋 管理アプリ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -379,7 +374,7 @@ select:focus{outline:none;border-color:#185fa5}
           <label class="btn btn-imp" style="cursor:pointer">ファイル選択<input type="file" accept=".csv" id="csv-import" style="display:none" onchange="importCSV(this)"></label>
         </div>
         <div class="settings-item">
-          <div><div class="si-label">全データエクスポート</div><div class="si-sub">全期間のデータをCSVで出力</div></div>
+          <div><div class="si-label">全データエクスポート</div><div class="si-sub">全期間のデータをCSVで出力。iPadでは保存画面から「ファイルに保存」を選べます</div></div>
           <button class="btn btn-csv" onclick="exportAllCSV()">全期間CSV</button>
         </div>
         <div class="settings-item">
@@ -411,7 +406,7 @@ select:focus{outline:none;border-color:#185fa5}
       <div class="card">
         <div class="card-title">アプリについて</div>
         <div class="settings-item">
-          <div><div class="si-label">床屋 管理アプリ</div><div class="si-sub">ver 3.0.2（統合版）— データはこのデバイスに保存されます</div></div>
+          <div><div class="si-label">床屋 管理アプリ</div><div class="si-sub">ver 3.0.3（iPad保存対応版）— データはこのデバイスに保存されます</div></div>
         </div>
       </div>
     </div>
@@ -573,7 +568,7 @@ select:focus{outline:none;border-color:#185fa5}
           <button class="small-btn btn-csv" onclick="hExportCSV()">CSV出力</button>
         </div>
         <div class="setting-row">
-          <div><div class="sr-label">全期間エクスポート</div><div class="sr-sub">全年度まとめてCSV出力</div></div>
+          <div><div class="sr-label">全期間エクスポート</div><div class="sr-sub">全年度まとめてCSV出力。iPadでは保存画面から「ファイルに保存」を選べます</div></div>
           <button class="small-btn btn-csv" onclick="hExportAllCSV()">全期間CSV</button>
         </div>
         <div class="setting-row">
@@ -811,6 +806,93 @@ function csvCell(v){
   const s=String(v??'');
   return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;
 }
+function escapeHTML(s){
+  return String(s??'').replace(/[&<>"']/g,ch=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[ch]));
+}
+function isIOSLikeDevice(){
+  const ua=navigator.userAgent||'';
+  return /iPad|iPhone|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+}
+function normalizeMimeType(mimeType){
+  return String(mimeType||'text/plain').split(';')[0]||'text/plain';
+}
+function showMiniNotice(message){
+  const old=document.getElementById('mini-notice');
+  if(old)old.remove();
+  const box=document.createElement('div');
+  box.id='mini-notice';
+  box.textContent=message;
+  box.style.cssText='position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:100000;background:rgba(20,40,50,.92);color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.25);';
+  document.body.appendChild(box);
+  setTimeout(()=>box.remove(),2200);
+}
+function showIOSSaveDialog(content,filename,mimeType){
+  const old=document.getElementById('ios-save-dialog');
+  if(old)old.remove();
+
+  const cleanType=normalizeMimeType(mimeType);
+  const blob=new Blob([content],{type:cleanType});
+  const url=URL.createObjectURL(blob);
+  let file=null,canShareFile=false;
+  try{
+    file=new File([blob],filename,{type:cleanType});
+    canShareFile=!!(navigator.canShare&&navigator.share&&navigator.canShare({files:[file]}));
+  }catch(_){canShareFile=false}
+
+  const backdrop=document.createElement('div');
+  backdrop.id='ios-save-dialog';
+  backdrop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;';
+
+  const card=document.createElement('div');
+  card.style.cssText='width:min(500px,100%);background:#fff;border-radius:22px;padding:20px;box-shadow:0 20px 45px rgba(0,0,0,.25);font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#222;';
+  card.innerHTML=`
+    <h3 style="margin:0 0 10px;font-size:18px;">iPad用ファイル保存</h3>
+    <p style="margin:0 0 12px;font-size:13px;line-height:1.7;color:#666;">
+      iPadでは自動ダウンロードが止まることがあるため、この画面から保存してください。<br>
+      ファイル名：<strong>${escapeHTML(filename)}</strong>
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin:14px 0;">
+      ${canShareFile?'<button type="button" id="ios-share-file-btn" class="btn btn-csv" style="width:100%;">共有メニューで保存</button>':''}
+      <a id="ios-open-file-link" href="${url}" download="${escapeHTML(filename)}" target="_blank" rel="noopener" class="btn btn-imp" style="display:block;text-align:center;text-decoration:none;">ファイルを開く / 保存</a>
+      <button type="button" id="ios-copy-file-btn" class="btn" style="width:100%;background:#f0f0ec;color:#222;">内容をコピー</button>
+    </div>
+    <p style="margin:0 0 14px;font-size:12px;line-height:1.7;color:#888;">
+      まずは「共有メニューで保存」→「ファイルに保存」が安全です。開いた場合は、共有ボタンから「ファイルに保存」を選べます。
+    </p>
+    <button type="button" id="ios-save-close-btn" class="btn" style="width:100%;background:#b0b0aa;color:#fff;">閉じる</button>
+  `;
+
+  backdrop.appendChild(card);
+  document.body.appendChild(backdrop);
+
+  const cleanup=()=>{URL.revokeObjectURL(url);backdrop.remove();};
+  const shareBtn=document.getElementById('ios-share-file-btn');
+  if(shareBtn&&file){
+    shareBtn.addEventListener('click',async()=>{
+      try{
+        await navigator.share({files:[file],title:filename});
+        showMiniNotice('共有メニューを開きました');
+      }catch(err){
+        if(!err||err.name!=='AbortError')alert('共有メニューを開けませんでした。「ファイルを開く / 保存」を試してください。');
+      }
+    });
+  }
+  const copyBtn=document.getElementById('ios-copy-file-btn');
+  if(copyBtn){
+    copyBtn.addEventListener('click',async()=>{
+      try{
+        await navigator.clipboard.writeText(String(content).replace(/^\uFEFF/,''));
+        showMiniNotice('CSV内容をコピーしました');
+      }catch(_){
+        alert('コピーできませんでした。「ファイルを開く / 保存」を試してください。');
+      }
+    });
+  }
+  document.getElementById('ios-save-close-btn').addEventListener('click',cleanup);
+  backdrop.addEventListener('click',e=>{if(e.target===backdrop)cleanup();});
+}
 function fmt(n){return Math.round(n).toLocaleString('ja-JP')}
 function toYM(s){return s.slice(0,7)}
 function di(s){return new Date(s+'T00:00:00').getDay()}
@@ -1001,10 +1083,21 @@ function exportAllCSV(){
   dlCSV(CSV_HEADER+'\n'+data.map(toCSVRow).join('\n'),'売上_全期間.csv');
 }
 function dlCSV(csv,name){
-  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const content='\uFEFF'+csv;
+  const mime='text/csv;charset=utf-8';
+
+  // iPad/iPhone Safari・ホーム画面PWAでは、Blobの自動ダウンロードが止まることがある。
+  // その場合はユーザー操作で保存できる画面に切り替える。
+  if(isIOSLikeDevice()){
+    showIOSSaveDialog(content,name,mime);
+    return;
+  }
+
+  const blob=new Blob([content],{type:mime});
   const a=document.createElement('a'),url=URL.createObjectURL(blob);
   a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  // Safari系では即時revokeでダウンロードがキャンセルされることがあるため長めに保持する
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 function importCSV(input){
   const file=input.files[0];if(!file)return;
