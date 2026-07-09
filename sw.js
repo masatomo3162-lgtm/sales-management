@@ -1,4 +1,4 @@
-const CACHE='barber-unified-v3.0.4-sales-icon-ipad-save';
+const CACHE='barber-unified-v3.0.5-sales-icon-unified';
 const ASSETS=['./','./index.html','./manifest.json','./icons/icon-192.png','./icons/icon-512.png'];
 
 self.addEventListener('install',event=>{
