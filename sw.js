@@ -1,4 +1,4 @@
-const CACHE='barber-unified-v3.0.6-icon-cache-bust';
+const CACHE='barber-unified-v3.1.0';
 const ASSETS=['./','./index.html','./manifest.json','./icons/icon-192-v306.png','./icons/icon-512-v306.png'];
 
 self.addEventListener('install',event=>{

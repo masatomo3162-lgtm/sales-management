@@ -38,6 +38,18 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .sw-btn{padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);transition:all .15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
 .sw-btn.active{background:#fff;color:#185fa5;border-color:#fff}
 .sw-btn:not(.active):hover{background:rgba(255,255,255,0.2)}
+.bk-btn{border-color:rgba(255,255,255,0.55);background:rgba(255,255,255,0.16)}
+
+/* ── バックアップモーダル ── */
+.bk-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99998;display:flex;align-items:center;justify-content:center;padding:18px}
+.bk-card{width:min(460px,100%);background:#fff;border-radius:20px;padding:20px;box-shadow:0 20px 45px rgba(0,0,0,.25);color:#222}
+.bk-card h3{margin:0 0 6px;font-size:17px}
+.bk-card .bk-sub{font-size:12px;color:#777;line-height:1.7;margin:0 0 14px}
+.bk-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid #eee}
+.bk-row:first-of-type{border-top:none}
+.bk-row-label{font-size:14px;font-weight:600}
+.bk-row-sub{font-size:11px;color:#888;margin-top:2px;line-height:1.6}
+.bk-close{width:100%;margin-top:14px;background:#b0b0aa;color:#fff}
 
 /* ── タブ（売上管理） ── */
 .tabs{display:flex;border-bottom:1px solid #e8e8e3;background:#fff;position:sticky;top:49px;z-index:99}
@@ -230,6 +242,7 @@ select:focus{outline:none;border-color:#185fa5}
   .mg{grid-template-columns:repeat(2,1fr)}
   .cnt-grid{grid-template-columns:repeat(2,1fr)}
   .sw-btn{padding:5px 9px;font-size:11px}
+  .bk-label{display:none}
 }
 </style>
 
@@ -278,6 +291,7 @@ select:focus{outline:none;border-color:#185fa5}
     <div class="app-switch">
       <button class="sw-btn active" id="sw-sales" onclick="switchApp('sales')">✂ 売上</button>
       <button class="sw-btn" id="sw-hikaku" onclick="switchApp('hikaku')">📊 比較</button>
+      <button class="sw-btn bk-btn" onclick="openBackupMenu()" aria-label="バックアップ">💾<span class="bk-label"> バックアップ</span></button>
     </div>
   </div>
 
@@ -410,7 +424,12 @@ select:focus{outline:none;border-color:#185fa5}
       <div class="card">
         <div class="card-title">アプリについて</div>
         <div class="settings-item">
-          <div><div class="si-label">床屋 管理アプリ</div><div class="si-sub">ver 3.0.6（アイコン強制更新版）— データはこのデバイスに保存されます</div></div>
+          <div><div class="si-label">床屋 管理アプリ</div><div class="si-sub">ver 3.1.0 — データはこのデバイスに保存されます<br><br>
+          <strong>変更履歴（3.1.0）</strong><br>
+          ・店舗比較画面の初期表示を「入力・編集／日別」に変更<br>
+          ・売上管理と店舗比較のバックアップCSVを統合<br>
+          ・両画面上部に共通バックアップボタン（💾）を追加<br>
+          ・CSVインポート時の重複登録防止と安全な復元処理を追加</div></div>
         </div>
       </div>
     </div>
@@ -607,6 +626,23 @@ select:focus{outline:none;border-color:#185fa5}
 
 </div><!-- /#main-app -->
 
+<!-- ── バックアップモーダル（共通） ── -->
+<div class="bk-backdrop" id="backup-modal" style="display:none">
+  <div class="bk-card">
+    <h3>💾 バックアップ</h3>
+    <p class="bk-sub">売上管理と店舗比較の全データ（売上・日別・月次・店舗名）を1つのCSVにまとめて保存・復元します。PINコードはセキュリティのためCSVに含まれません。</p>
+    <div class="bk-row">
+      <div><div class="bk-row-label">統合CSVをエクスポート</div><div class="bk-row-sub">全データを1ファイルで保存。iPadでは保存画面から「ファイルに保存」を選べます</div></div>
+      <button class="btn btn-csv" onclick="exportUnifiedCSV()">エクスポート</button>
+    </div>
+    <div class="bk-row">
+      <div><div class="bk-row-label">統合CSVをインポート</div><div class="bk-row-sub">バックアップ時点の状態へ置き換えて復元します（旧形式CSVも読み込み可）</div></div>
+      <label class="btn btn-imp" style="cursor:pointer">ファイル選択<input type="file" accept=".csv,text/csv" id="unified-import" style="display:none" onchange="importUnifiedFile(this)"></label>
+    </div>
+    <button class="btn bk-close" onclick="closeBackupMenu()">閉じる</button>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════
 // 定数・共通
@@ -750,10 +786,17 @@ function switchApp(appName){
     hUpdateYearLabel();
     hFillMonthSel();
     hFillDayInpSels();
-    hBuildMonthlyForm();
-    hBuildDayForm();
-    renderHikakuAll();
+    // 上部の「比較」ボタンから入った場合は必ず「入力・編集／日別」を初期表示する
+    // （比較画面内でのタブ切り替えでは呼ばれないため、途中で日別へ戻されることはない）
+    hResetToInputDaily();
   }
+}
+
+function hResetToInputDaily(){
+  sw_h('input'); // 入力・編集タブへ（内部でフォーム構築と再描画も行う）
+  const buttons=document.querySelectorAll('#app-hikaku .inp-mode-row .vt-btn');
+  setInpMode('daily',buttons[1]); // 「日別入力」を選択状態に
+  hBuildDayForm();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1110,6 +1153,14 @@ function importCSV(input){
     try{
       const rows=parseCSV(e.target.result);
       if(!rows.length){alert('CSVが空です');return}
+      importSalesRows(rows);
+    }catch(err){alert('読み込みエラー：'+err.message)}
+    finally{input.value=''}
+  };
+  reader.onerror=()=>{alert('ファイルを読み込めませんでした');input.value=''};
+  reader.readAsText(file,'UTF-8');
+}
+function importSalesRows(rows){
       const headerIndex=rows.findIndex(r=>r.some(c=>String(c).trim()==='日付'));
       if(headerIndex<0){alert('フォーマットが違います（日付列がありません）');return}
       const header=rows[headerIndex].map(c=>String(c).trim());
@@ -1142,11 +1193,6 @@ function importCSV(input){
       sPersist(existing);fillSelects();
       syncAllToHikakuSilent(existing,true);
       alert(`インポート完了：新規${added}件、更新${updated}件\n（比較アプリにも自動反映しました）`);
-    }catch(err){alert('読み込みエラー：'+err.message)}
-    finally{input.value=''}
-  };
-  reader.onerror=()=>{alert('ファイルを読み込めませんでした');input.value=''};
-  reader.readAsText(file,'UTF-8');
 }
 function syncAllToHikakuSilent(data,removeStale=false){
   const dd=hLoadD(),dates=new Set(data.map(r=>r.date)),affected=new Set(data.map(r=>toYM(r.date)));
@@ -1574,7 +1620,17 @@ function hImportCSV(input){
   const reader=new FileReader();
   reader.onload=e=>{
     try{
-      const rows=parseCSV(e.target.result),md=hLoadM(),dd=hLoadD();
+      const rows=parseCSV(e.target.result);
+      if(!rows.length){alert('CSVが空です');return}
+      importHikakuRows(rows);
+    }catch(err){alert('読み込みエラー：'+err.message)}
+    finally{input.value=''}
+  };
+  reader.onerror=()=>{alert('ファイルを読み込めませんでした');input.value=''};
+  reader.readAsText(file,'UTF-8');
+}
+function importHikakuRows(rows){
+      const md=hLoadM(),dd=hLoadD();
       let ma=0,da=0,mode='';
       for(const raw of rows){
         const cols=raw.map(c=>String(c).trim());
@@ -1601,17 +1657,182 @@ function hImportCSV(input){
       if(!ma&&!da){alert('有効なデータが見つかりませんでした');return}
       hSaveM(md);hSaveD(dd);hFillMonthSel();hFillDayInpSels();hBuildMonthlyForm();hBuildDayForm();renderHikakuAll();
       alert(`インポート完了：月次${ma}件、日別${da}件`);
-    }catch(err){alert('読み込みエラー：'+err.message)}
-    finally{input.value=''}
-  };
-  reader.onerror=()=>{alert('ファイルを読み込めませんでした');input.value=''};
-  reader.readAsText(file,'UTF-8');
 }
 
 function hDeleteAll(){
   if(!confirm('全データを削除しますか？\nこの操作は取り消せません。'))return;
   if(!confirm('本当に削除しますか？'))return;
   localStorage.removeItem(MKEY);localStorage.removeItem(DKEY);renderHikakuAll();alert('削除しました');
+}
+
+// ═══════════════════════════════════════════════════════
+// 統合バックアップ（売上管理＋店舗比較を1つのCSVに）
+// ═══════════════════════════════════════════════════════
+const UNIFIED_VERSION='3.1.0';
+const UNIFIED_HEADER=['データ種別','キー','店舗ID','値1','値2','値3','値4','値5','値6','値7','値8','値9','値10'];
+
+function openBackupMenu(){document.getElementById('backup-modal').style.display='flex'}
+function closeBackupMenu(){document.getElementById('backup-modal').style.display='none'}
+
+function unifiedBackupName(){
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  return `sales-management-backup_${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.csv`;
+}
+
+function buildUnifiedCSV(){
+  const lines=[UNIFIED_HEADER.map(csvCell).join(',')];
+  const push=arr=>lines.push(arr.map(csvCell).join(','));
+  push(['META','version','',UNIFIED_VERSION]);
+  push(['META','exported','',new Date().toISOString()]);
+  const names=hGetNames();
+  push(['SETTING','store_name','a',names.a]);
+  push(['SETTING','store_name','b',names.b]);
+  sLoad().forEach(r=>push(['SALES',r.date,'',r.cash||0,r.cl||0,r.male||0,r.female||0,r.elem||0,r.mid||0,r.high||0,r.perm||0,r.color||0]));
+  const md=hLoadM();
+  Object.keys(md).sort().forEach(k=>{
+    if(md[k].a)push(['HIKAKU_MONTH',k,'a',md[k].a]);
+    if(md[k].b)push(['HIKAKU_MONTH',k,'b',md[k].b]);
+  });
+  const dd=hLoadD();
+  Object.keys(dd).sort().forEach(k=>{
+    if(dd[k].a)push(['HIKAKU_DAY',k,'a',dd[k].a]);
+    if(dd[k].b)push(['HIKAKU_DAY',k,'b',dd[k].b]);
+  });
+  return lines.join('\n');
+}
+
+function exportUnifiedCSV(){
+  dlCSV(buildUnifiedCSV(),unifiedBackupName());
+}
+
+// 統合CSVの行を解析し、復元用データを組み立てる（検証に失敗したら null）
+// この段階では localStorage には一切触れない（既存データ保護）
+function parseUnifiedRows(rows){
+  let hasMeta=false;
+  const sales=[],md={},dd={};
+  let names={a:'店舗A',b:'店舗B'};
+  const isYM=s=>/^\d{4}-\d{2}$/.test(s)&&+s.slice(5,7)>=1&&+s.slice(5,7)<=12;
+  for(const raw of rows){
+    const c=raw.map(v=>String(v).trim());
+    const type=c[0],key=c[1]||'',sid=c[2]||'';
+    if(type==='データ種別')continue; // ヘッダー行
+    if(type==='META'){if(key==='version')hasMeta=true;continue}
+    if(type==='SETTING'){
+      if(key==='store_name'&&(sid==='a'||sid==='b')&&c[3])names[sid]=c[3];
+      continue;
+    }
+    if(type==='SALES'){
+      if(!isValidISODate(key))return null;
+      const cash=safeInt(c[3]),cl=safeInt(c[4]);
+      const male=safeInt(c[5]),female=safeInt(c[6]),elem=safeInt(c[7]),mid=safeInt(c[8]),high=safeInt(c[9]);
+      sales.push({date:key,cash,cl,total:cash+cl,
+        male,female,elem,mid,high,guests:male+female+elem+mid+high,
+        perm:safeInt(c[10]),color:safeInt(c[11])});
+      continue;
+    }
+    if(type==='HIKAKU_MONTH'){
+      if(!isYM(key)||(sid!=='a'&&sid!=='b'))return null;
+      const v=safeInt(c[3]);
+      if(v){if(!md[key])md[key]={a:0,b:0};md[key][sid]=v}
+      continue;
+    }
+    if(type==='HIKAKU_DAY'){
+      if(!isValidISODate(key)||(sid!=='a'&&sid!=='b'))return null;
+      const v=safeInt(c[3]);
+      if(v){if(!dd[key])dd[key]={a:0,b:0};dd[key][sid]=v}
+      continue;
+    }
+    return null; // 未知のデータ種別 → 形式エラー
+  }
+  if(!hasMeta)return null; // METAのversion行がないCSVは統合形式とみなさない
+  // 同一日付の重複行は後勝ちで1件に統合（重複登録防止）
+  const seen=new Map();
+  sales.forEach(r=>seen.set(r.date,r));
+  const uniq=[...seen.values()].sort((a,b)=>a.date.localeCompare(b.date));
+  return {sales:uniq,md,dd,names};
+}
+
+function importUnifiedFile(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{handleUnifiedImportText(String(e.target.result))}
+    catch(err){alert('読み込みエラー：'+err.message)}
+    finally{input.value=''}
+  };
+  reader.onerror=()=>{alert('ファイルを読み込めませんでした');input.value=''};
+  reader.readAsText(file,'UTF-8');
+}
+
+function handleUnifiedImportText(text){
+  const rows=parseCSV(text);
+  if(!rows.length){alert('CSVが空です');return}
+  const firstCells=rows[0].map(v=>String(v).trim());
+  const isUnified=firstCells[0]==='データ種別'||rows.some(r=>String(r[0]).trim()==='META');
+  if(isUnified){
+    const parsed=parseUnifiedRows(rows);
+    if(!parsed){alert('統合CSVの形式が正しくありません。既存データは変更されていません。');return}
+    confirmReplaceRestore(parsed);
+    return;
+  }
+  // ── 旧形式の互換読み込み ──
+  // 旧・売上管理CSV（「日付」列あり）→ 従来どおり日付単位で上書きマージ
+  if(rows.some(r=>r.some(v=>String(v).trim()==='日付'))){
+    if(!confirm('旧形式（売上管理）のCSVです。\n現在のデータに読み込みます（同じ日付は上書き）。よろしいですか？'))return;
+    importSalesRows(rows);closeBackupMenu();return;
+  }
+  // 旧・店舗比較CSV（「年,月」ヘッダーあり）
+  if(rows.some(r=>String(r[0]).trim()==='年'&&String(r[1]).trim()==='月')){
+    if(!confirm('旧形式（店舗比較）のCSVです。\n現在のデータに読み込みます（同じ年月・日付は上書き）。よろしいですか？'))return;
+    importHikakuRows(rows);closeBackupMenu();return;
+  }
+  alert('対応していないCSV形式です。既存データは変更されていません。');
+}
+
+function confirmReplaceRestore(parsed){
+  const old=document.getElementById('restore-confirm');
+  if(old)old.remove();
+  const nS=parsed.sales.length,nM=Object.keys(parsed.md).length,nD=Object.keys(parsed.dd).length;
+  const backdrop=document.createElement('div');
+  backdrop.id='restore-confirm';
+  backdrop.className='bk-backdrop';
+  backdrop.style.zIndex='99999';
+  const card=document.createElement('div');
+  card.className='bk-card';
+  card.innerHTML=`
+    <h3>バックアップの復元</h3>
+    <p class="bk-sub">バックアップデータを読み込みます。現在のデータを置き換えますか？<br>
+    内容：売上 ${nS}件／比較・月次 ${nM}件／比較・日別 ${nD}件</p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button type="button" id="restore-yes" class="btn btn-p" style="width:100%">現在のデータを置き換えて復元</button>
+      <button type="button" id="restore-no" class="btn" style="width:100%;background:#b0b0aa;color:#fff">キャンセル</button>
+    </div>`;
+  backdrop.appendChild(card);
+  document.body.appendChild(backdrop);
+  const close=()=>backdrop.remove();
+  document.getElementById('restore-no').addEventListener('click',close);
+  backdrop.addEventListener('click',e=>{if(e.target===backdrop)close()});
+  document.getElementById('restore-yes').addEventListener('click',()=>{
+    close();
+    applyUnifiedRestore(parsed);
+  });
+}
+
+function applyUnifiedRestore(p){
+  // 検証済みデータのみをここで書き込む（置き換え方式なので何度読み込んでも重複しない）
+  sPersist(p.sales);
+  hSaveM(p.md);
+  hSaveD(p.dd);
+  localStorage.setItem(NKEY,JSON.stringify(p.names));
+  // 画面を全て再描画
+  document.getElementById('today-box').style.display='none';
+  fillSelects();
+  hUpdateLabels();
+  hFillMonthSel();hFillDayInpSels();hBuildMonthlyForm();hBuildDayForm();
+  renderHikakuAll();
+  renderList();renderSum();
+  closeBackupMenu();
+  alert(`復元しました：売上 ${p.sales.length}件／比較・月次 ${Object.keys(p.md).length}件／比較・日別 ${Object.keys(p.dd).length}件`);
 }
 
 // ═══════════════════════════════════════════════════════
